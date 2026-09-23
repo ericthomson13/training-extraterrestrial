@@ -260,6 +260,7 @@
         <div class="ex-top">
           <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}</div>
           <div class="ex-actions">
+            <span class="ex-done-badge" hidden>✓ Done</span>
             ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
             <span class="disclosure" aria-hidden="true"></span>
           </div>
@@ -292,7 +293,15 @@
         <button type="button" class="ex-next" data-act="next" aria-label="${isLast ? "Mark done" : "Mark done and go to next exercise"}">✓ Done${isLast ? "" : " — next exercise"}</button>
       </div>`;
 
-    const refreshDone = () => el.classList.toggle("done", di.sets.length > 0 && di.sets.every(x => x.done));
+    const doneBadge = el.querySelector(".ex-done-badge");
+    // "done" isn't color-only (WCAG 1.4.1): the badge is real text, not a
+    // CSS-generated glyph, so it's read by screen readers and visible
+    // regardless of the green tint for colorblind users.
+    const refreshDone = () => {
+      const isDone = di.sets.length > 0 && di.sets.every(x => x.done);
+      el.classList.toggle("done", isDone);
+      doneBadge.hidden = !isDone;
+    };
     refreshDone();
     el.querySelectorAll(".set[data-k]").forEach(row => {
       const k = +row.dataset.k, st = di.sets[k];
@@ -402,8 +411,8 @@
         <div class="stat"><b>Squat e1RM</b><span>${sq ? sq.v + " lb" : "—"}</span><em>${sq ? esc(sq.src) : "Test in Week 1, Day 2"}</em></div>
         <div class="stat"><b>Deadlift e1RM</b><span>${dl ? dl.v + " lb" : "—"}</span><em>${dl ? esc(dl.src) : "Test in Week 1, Day 2"}</em></div>
       </div>
-      ${tests.length ? `<div class="tbl-wrap"><table class="tests"><thead><tr><th>Test</th>${tests.map(t => `<th>${fmt(parseISO(t.date))}</th>`).join("")}</tr></thead><tbody>
-        ${TEST_FIELDS.filter(f => tests.some(t => t.v[f[0]] != null)).map(f => `<tr><td>${esc(f[1])} <span class="progress">${esc(f[2])}</span></td>${tests.map(t => `<td class="num">${esc(showVal(t.v[f[0]]))}</td>`).join("")}</tr>`).join("")}
+      ${tests.length ? `<div class="tbl-wrap"><table class="tests"><thead><tr><th scope="col">Test</th>${tests.map(t => `<th scope="col">${fmt(parseISO(t.date))}</th>`).join("")}</tr></thead><tbody>
+        ${TEST_FIELDS.filter(f => tests.some(t => t.v[f[0]] != null)).map(f => `<tr><th scope="row">${esc(f[1])} <span class="progress">${esc(f[2])}</span></th>${tests.map(t => `<td class="num">${esc(showVal(t.v[f[0]]))}</td>`).join("")}</tr>`).join("")}
       </tbody></table></div>` : `<p class="empty">No tests yet. Week 1 test sessions fill this in when you save them, or add results below.</p>`}
       <details class="panel" id="addTest">
         <summary><h2>Add or correct results</h2></summary>

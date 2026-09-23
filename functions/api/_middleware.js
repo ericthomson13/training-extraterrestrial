@@ -1,4 +1,4 @@
-import { verifyAccessJWT } from "./_lib/access.js";
+import { verifyAccessJWT } from "../_lib/access.js";
 
 // Guards every /api/* request. Verifies the Cloudflare Access JWT and sets
 // context.data.userEmail — the value every route scopes its D1 queries to.

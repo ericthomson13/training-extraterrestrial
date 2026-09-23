@@ -104,13 +104,27 @@
   let selWeek = currentWeek();
   let selKey = null;
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
+  function loggedKeysInWeek(w) {
+    if (w === "S") return new Set();
+    const s = weekStart(w), end = new Date(s); end.setDate(end.getDate() + 7);
+    return new Set(getLog().filter(e => { const d = parseISO(e.date); return d >= s && d < end; }).map(e => e.key));
+  }
   function defaultKey(w) {
-    const done = new Set(getLog().filter(e => {
-      if (w === "S") return false;
-      const d = parseISO(e.date), s = weekStart(w), end = new Date(s); end.setDate(end.getDate() + 7);
-      return d >= s && d < end;
-    }).map(e => e.key));
+    const done = loggedKeysInWeek(w);
     return sessionKeys(w).find(k => !done.has(k)) || sessionKeys(w)[0];
+  }
+  // A past week is "hit" once every one of its planned sessions has a logged
+  // entry dated inside that week; "S" (in-season) never resolves to hit/miss
+  // since it isn't a fixed 7-day block.
+  function isWeekHit(w) {
+    const done = loggedKeysInWeek(w);
+    return sessionKeys(w).every(k => done.has(k));
+  }
+  function weekStatus(w) {
+    const cw = currentWeek();
+    if (w === "S") return cw === "S" ? "current" : "upcoming";
+    if (cw === "S" || w < cw) return isWeekHit(w) ? "hit" : "miss";
+    return w === cw ? "current" : "upcoming";
   }
   const draftKey = id => "ssl:draft:" + id;
   function getDraft(s) {
@@ -136,15 +150,28 @@
     while (d.items.length < s.items.length) d.items.push({ sets: [], note: "" });
     s.items.forEach((it, i) => { while (d.items[i].sets.length < it.sets) d.items[i].sets.push({ done: false, load: "", reps: "", rpe: "" }); });
 
-    const cw = currentWeek(), logged = loggedIds();
+    const logged = loggedIds();
     $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
     const typeForWarm = s.type === "B" ? "B" : s.type === "C" ? "C" : "A";
     const erg = typeForWarm === "B" ? "SkiErg" : "Assault bike";
     const noSpikes = s.me || selWeek === 8 || s.type === "C";
 
     app.innerHTML = `
-      <div class="weeks" role="group" aria-label="Week">
-        ${WEEKS.map(w => `<button type="button" class="chip${w === cw ? " now" : ""}" data-week="${w}" aria-pressed="${w === selWeek}">${w === "S" ? "In-season" : "Wk " + w}</button>`).join("")}
+      <div class="weeks-row">
+        <button type="button" class="weeks-nav" id="weeksPrev" aria-label="Scroll weeks left">‹</button>
+        <div class="weeks" role="group" aria-label="Week" id="weeksScroll">
+          ${WEEKS.map(w => {
+            const status = weekStatus(w);
+            const label = w === "S" ? "In-season" : "Wk " + w;
+            // status conveyed by more than color alone (WCAG 1.4.1): a glyph in
+            // the label plus a fuller aria-label for screen readers
+            const glyph = status === "hit" ? " ✓" : status === "miss" ? " ✕" : "";
+            const statusWord = { hit: "completed", miss: "missed", current: "current week", upcoming: "upcoming" }[status];
+            const dateInfo = w === "S" ? "" : `, ${weekDates(w)}`;
+            return `<button type="button" class="chip status-${status}" data-week="${w}" aria-pressed="${w === selWeek}" aria-label="${esc(label)}${esc(dateInfo)}, ${statusWord}">${esc(label)}${glyph}</button>`;
+          }).join("")}
+        </div>
+        <button type="button" class="weeks-nav" id="weeksNext" aria-label="Scroll weeks right">›</button>
       </div>
       <div class="sessions" role="group" aria-label="Session">
         ${sessionKeys(selWeek).map(k => `<button type="button" class="seg" data-key="${k}" aria-pressed="${k === selKey}">${esc(KEYNAME[k] || k)}${logged.has(`w${selWeek}-${k}`) ? '<span class="tick" aria-label="logged">●</span>' : ""}</button>`).join("")}
@@ -199,6 +226,16 @@
     };
     const pressed = app.querySelector('.chip[aria-pressed="true"]');
     if (pressed) pressed.scrollIntoView({ block: "nearest", inline: "center" });
+
+    const scroller = $("#weeksScroll"), prevBtn = $("#weeksPrev"), nextBtn = $("#weeksNext");
+    const updateNav = () => {
+      prevBtn.disabled = scroller.scrollLeft <= 0;
+      nextBtn.disabled = scroller.scrollLeft >= scroller.scrollWidth - scroller.clientWidth - 1;
+    };
+    prevBtn.onclick = () => scroller.scrollBy({ left: -160, behavior: "smooth" });
+    nextBtn.onclick = () => scroller.scrollBy({ left: 160, behavior: "smooth" });
+    scroller.onscroll = updateNav;
+    updateNav();
   }
 
   function renderItem(s, it, d, i) {
@@ -482,10 +519,45 @@
   // unless we're mid-session (a live re-render there would drop focus/typing)
   window.addEventListener("ssl:data-updated", () => { if (view !== "session") render(); });
 
-  // theme: system → light → dark
-  const applyTheme = t => { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); $("#themeBtn").textContent = t ? (t === "dark" ? "Dark" : "Light") : "Auto"; };
-  applyTheme(store.get(THEME, null));
-  $("#themeBtn").onclick = () => { const cur = store.get(THEME, null); const nxt = cur === null ? "light" : cur === "light" ? "dark" : null; store.set(THEME, nxt); applyTheme(nxt); };
+  // theme: Auto (system) / Light / Dark, via a custom listbox (not a native
+  // <select> — its open-state chrome is OS-rendered and ignores page CSS)
+  const applyTheme = t => { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); };
+  const themeBtn = $("#themeBtn"), themeMenu = $("#themeMenu");
+  const themeItems = () => Array.from(themeMenu.querySelectorAll("li"));
+  const THEME_LABEL = { "": "Auto", light: "Light", dark: "Dark" };
+
+  function setThemeUI(v) {
+    themeBtn.textContent = THEME_LABEL[v];
+    themeItems().forEach(li => li.setAttribute("aria-selected", String(li.dataset.value === v)));
+  }
+  function closeThemeMenu(focusBtn) {
+    themeMenu.hidden = true; themeBtn.setAttribute("aria-expanded", "false");
+    if (focusBtn) themeBtn.focus();
+  }
+  function openThemeMenu() {
+    themeMenu.hidden = false; themeBtn.setAttribute("aria-expanded", "true");
+    (themeItems().find(li => li.getAttribute("aria-selected") === "true") || themeItems()[0]).focus();
+  }
+  function selectTheme(v) { store.set(THEME, v || null); applyTheme(v || null); setThemeUI(v); }
+
+  const storedTheme = store.get(THEME, null) || "";
+  applyTheme(storedTheme || null);
+  setThemeUI(storedTheme);
+
+  themeBtn.onclick = () => (themeMenu.hidden ? openThemeMenu() : closeThemeMenu(false));
+  themeItems().forEach(li => {
+    li.onclick = () => { selectTheme(li.dataset.value); closeThemeMenu(true); };
+    li.onkeydown = e => {
+      const items = themeItems(), i = items.indexOf(li);
+      if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectTheme(li.dataset.value); closeThemeMenu(true); }
+      else if (e.key === "Escape") { closeThemeMenu(true); }
+      else if (e.key === "Tab") { closeThemeMenu(false); }
+    };
+  });
+  document.addEventListener("click", e => { if (!themeMenu.hidden && !e.target.closest(".theme-picker")) closeThemeMenu(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !themeMenu.hidden) closeThemeMenu(true); });
 
   // keep the screen on while logging, where allowed
   async function wake() { try { if (navigator.wakeLock && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch (e) {} }

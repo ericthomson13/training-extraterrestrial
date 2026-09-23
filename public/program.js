@@ -5,7 +5,26 @@
             lift = key into maxes for % targets, t = test key, v = video key, n = cue */
 window.PROGRAM = {
   version: "2026-09-23",
-  start: "2026-09-28",
+  // Season shape lives here, not hardcoded in app.js, so a future season is a
+  // new program.js with no app.js changes: different week count, different
+  // phase labels, a different in-season start date, all just data.
+  season: {
+    start: "2026-09-28",
+    inSeasonStart: "2026-12-14",
+    weeks: [
+      { n: 1, phase: "Normalize + test" },
+      { n: 2, phase: "Foundation" },
+      { n: 3, phase: "Foundation" },
+      { n: 4, phase: "Foundation" },
+      { n: 5, phase: "Max strength + ME" },
+      { n: 6, phase: "Max strength + ME" },
+      { n: 7, phase: "Max strength + ME" },
+      { n: 8, phase: "Deload + retest", deload: true },
+      { n: 9, phase: "Power + conversion" },
+      { n: 10, phase: "Power + conversion" },
+      { n: 11, phase: "Power + conversion" }
+    ]
+  },
   // e1RM in lb. Filled in after testing; the app's own test results take priority.
   maxes: { squat: null, deadlift: null },
 

@@ -22,21 +22,24 @@
   const parseISO = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const fmt = d => `${MON[d.getMonth()]} ${d.getDate()}`;
-  const start = parseISO(P.start);
+  // Season shape (week count, phase labels, deload weeks, in-season start)
+  // comes entirely from program.js's `season` data — nothing here is tied to
+  // a specific season, so a future season is a new program.js, not app.js edits.
+  const start = parseISO(P.season.start);
+  const weekMeta = w => P.season.weeks.find(x => x.n === w);
   const weekStart = w => new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7 * (w - 1));
   function currentWeek() {
     const days = Math.floor((new Date() - start) / 864e5);
     if (days < 0) return 1;
     const w = Math.floor(days / 7) + 1;
-    return w > 11 ? "S" : w;
+    return w > P.season.weeks.length ? "S" : w;
   }
-  const PHASE = w => w === "S" ? "In-season" : w === 1 ? "Normalize + test" : w <= 4 ? "Foundation" :
-    w <= 7 ? "Max strength + ME" : w === 8 ? "Deload + retest" : "Power + conversion";
+  const PHASE = w => w === "S" ? "In-season" : (weekMeta(w) || {}).phase || "";
   const weekLabel = w => w === "S" ? "In-season" : `Week ${w}`;
-  const weekDates = w => { if (w === "S") return "From Dec 14"; const a = weekStart(w), b = weekStart(w); b.setDate(b.getDate() + 6); return `${fmt(a)} – ${fmt(b)}`; };
+  const weekDates = w => { if (w === "S") return `From ${fmt(parseISO(P.season.inSeasonStart))}`; const a = weekStart(w), b = weekStart(w); b.setDate(b.getDate() + 6); return `${fmt(a)} – ${fmt(b)}`; };
 
   /* ---------- program model ---------- */
-  const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, "S"];
+  const WEEKS = P.season.weeks.map(w => w.n).concat("S");
   function sessionKeys(w) {
     const s = P.singles.filter(x => x.week === w).map(x => x.key);
     return s.length ? s : ["A", "B", "C"];
@@ -154,7 +157,7 @@
     $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
     const typeForWarm = s.type === "B" ? "B" : s.type === "C" ? "C" : "A";
     const erg = typeForWarm === "B" ? "SkiErg" : "Assault bike";
-    const noSpikes = s.me || selWeek === 8 || s.type === "C";
+    const noSpikes = s.me || (weekMeta(selWeek) || {}).deload || s.type === "C";
 
     app.innerHTML = `
       <div class="weeks-row">

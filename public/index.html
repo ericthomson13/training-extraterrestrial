@@ -109,12 +109,20 @@ details.panel[open]>summary::after{content:"－"}
 .note-muted{color:var(--muted);font-size:13px;margin:10px 0 0}
 
 /* Exercise card */
-.ex{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:12px;padding:14px}
+.ex{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:12px}
 .ex.done{border-color:var(--ok);background:linear-gradient(var(--ok-soft),var(--ok-soft)) padding-box}
+.ex>summary{list-style:none;cursor:pointer;padding:14px}
+.ex>summary::-webkit-details-marker{display:none}
+.ex-body{padding:0 14px 14px}
 .ex-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .ex-name{font-weight:600;font-size:16px;line-height:1.3}
 .ex-name a{text-decoration:none;color:inherit;border-bottom:1px dashed var(--muted)}
+.ex-actions{display:flex;align-items:center;gap:8px;flex:none}
+.disclosure{width:14px;text-align:center;color:var(--muted);font-size:15px}
+.disclosure::before{content:"＋"}
+.ex[open] .disclosure::before{content:"－"}
 .vid{flex:none;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;padding:4px 8px;text-decoration:none;color:var(--accent);background:var(--sunk)}
+.ex-next{width:100%;margin-top:12px;height:40px;border:1px solid var(--ok);background:var(--ok-soft);color:var(--ink);border-radius:8px;font-weight:700;font-size:14px}
 .rx{font:500 15px/1.3 var(--mono);margin-top:6px}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tag{font-size:12px;border-radius:6px;padding:3px 8px;background:var(--sunk);border:1px solid var(--line);color:var(--muted)}

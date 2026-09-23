@@ -185,7 +185,7 @@
         <div class="progress" id="prog"></div>
       </div>
       ${s.noWarmup ? "" : `
-      <details class="panel" id="warm">
+      <details class="panel" id="warm" open>
         <summary><span><h2>Warm-up · ${erg}</h2><span class="progress">7 min erg · mobility · activation · ~14 min</span></span></summary>
         <div class="panel-body">
           <table class="erg"><tbody>${P.warmup.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${r[0]}</td><td>${esc(r[1])}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table>
@@ -241,8 +241,8 @@
     updateNav();
   }
 
-  function renderItem(s, it, d, i) {
-    const el = document.createElement("article");
+  function renderItem(s, it, d, i, open) {
+    const el = document.createElement("details");
     const di = d.items[i];
     const tgt = targetLoad(it);
     const last = lastFor(it.name, null);
@@ -252,35 +252,45 @@
     const loadPh = tgt ? String(tgt) : last && last.set.load ? String(last.set.load) : "";
     const repsPh = it.reps || "";
     const maxInfo = it.lift && it.pct ? getMax(it.lift) : null;
+    const isLast = i === s.items.length - 1;
     el.className = "ex";
+    if (open) el.open = true;
     el.innerHTML = `
-      <div class="ex-top">
-        <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}</div>
-        ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
-      </div>
-      <div class="rx">${esc(it.rx)}</div>
-      <div class="meta">
-        ${tgt ? `<span class="tag target">Target ${tgt} lb</span>` : ""}
-        ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
-        ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " lb", last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
-      </div>
-      ${it.n ? `<div class="cue">${esc(it.n)}</div>` : ""}
-      ${it.circuit ? `<div class="cue">${esc(P.meCircuit)}</div>` : ""}
-      <div class="sets">
-        <div class="sets-head ${cls}" aria-hidden="true"><span>Set</span>${it.bw ? "" : "<span>Load</span>"}<span>${esc(unit)}</span>${it.norpe ? "" : "<span>RPE</span>"}</div>
-        ${di.sets.map((st, k) => `
-          <div class="${cls}" data-k="${k}">
-            <button type="button" class="n" aria-pressed="${st.done}" aria-label="Mark set ${k + 1} done">${st.done ? "✓" : k + 1}</button>
-            ${it.bw ? "" : `<div class="field"><input id="l-${s.id}-${i}-${k}" data-f="load" inputmode="decimal" value="${esc(st.load)}" placeholder="${loadPh}" aria-label="Set ${k + 1} load"><span>lb</span></div>`}
-            <div class="field"><input id="r-${s.id}-${i}-${k}" data-f="reps" inputmode="decimal" value="${esc(st.reps)}" placeholder="${esc(repsPh)}" aria-label="Set ${k + 1} ${esc(unit)}"><span>${esc(it.u || "")}</span></div>
-            ${it.norpe ? "" : `<div class="field"><input id="p-${s.id}-${i}-${k}" data-f="rpe" inputmode="decimal" value="${esc(st.rpe)}" placeholder="RPE" aria-label="Set ${k + 1} RPE"></div>`}
-          </div>`).join("")}
-      </div>
-      <div class="row-actions">
-        <button type="button" class="link-btn" data-act="add">+ Set</button>
-        <button type="button" class="link-btn" data-act="note">${di.note ? "Edit note" : "+ Note"}</button>
-      </div>
-      <textarea data-f="note" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>`;
+      <summary>
+        <div class="ex-top">
+          <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}</div>
+          <div class="ex-actions">
+            ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
+            <span class="disclosure" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="rx">${esc(it.rx)}</div>
+        <div class="meta">
+          ${tgt ? `<span class="tag target">Target ${tgt} lb</span>` : ""}
+          ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
+          ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " lb", last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
+        </div>
+        ${it.n ? `<div class="cue">${esc(it.n)}</div>` : ""}
+        ${it.circuit ? `<div class="cue">${esc(P.meCircuit)}</div>` : ""}
+      </summary>
+      <div class="ex-body">
+        <div class="sets">
+          <div class="sets-head ${cls}" aria-hidden="true"><span>Set</span>${it.bw ? "" : "<span>Load</span>"}<span>${esc(unit)}</span>${it.norpe ? "" : "<span>RPE</span>"}</div>
+          ${di.sets.map((st, k) => `
+            <div class="${cls}" data-k="${k}">
+              <button type="button" class="n" aria-pressed="${st.done}" aria-label="Mark set ${k + 1} done">${st.done ? "✓" : k + 1}</button>
+              ${it.bw ? "" : `<div class="field"><input id="l-${s.id}-${i}-${k}" data-f="load" inputmode="decimal" value="${esc(st.load)}" placeholder="${loadPh}" aria-label="Set ${k + 1} load"><span>lb</span></div>`}
+              <div class="field"><input id="r-${s.id}-${i}-${k}" data-f="reps" inputmode="decimal" value="${esc(st.reps)}" placeholder="${esc(repsPh)}" aria-label="Set ${k + 1} ${esc(unit)}"><span>${esc(it.u || "")}</span></div>
+              ${it.norpe ? "" : `<div class="field"><input id="p-${s.id}-${i}-${k}" data-f="rpe" inputmode="decimal" value="${esc(st.rpe)}" placeholder="RPE" aria-label="Set ${k + 1} RPE"></div>`}
+            </div>`).join("")}
+        </div>
+        <div class="row-actions">
+          <button type="button" class="link-btn" data-act="add">+ Set</button>
+          <button type="button" class="link-btn" data-act="note">${di.note ? "Edit note" : "+ Note"}</button>
+        </div>
+        <textarea data-f="note" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>
+        <button type="button" class="ex-next" data-act="next" aria-label="${isLast ? "Mark done" : "Mark done and go to next exercise"}">✓ Done${isLast ? "" : " — next exercise"}</button>
+      </div>`;
 
     const refreshDone = () => el.classList.toggle("done", di.sets.length > 0 && di.sets.every(x => x.done));
     refreshDone();
@@ -307,7 +317,12 @@
     el.querySelector('[data-act="note"]').onclick = () => { ta.hidden = false; ta.focus(); };
     el.querySelector('[data-act="add"]').onclick = () => {
       di.sets.push({ done: false, load: "", reps: "", rpe: "" }); store.set(draftKey(s.id), d);
-      el.replaceWith(renderItem(s, it, d, i)); updateProgress(s, d);
+      el.replaceWith(renderItem(s, it, d, i, el.open)); updateProgress(s, d);
+    };
+    el.querySelector('[data-act="next"]').onclick = () => {
+      el.open = false;
+      const next = el.nextElementSibling;
+      if (next && next.tagName === "DETAILS") { next.open = true; next.scrollIntoView({ behavior: "smooth", block: "start" }); }
     };
     return el;
   }

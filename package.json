@@ -2,13 +2,18 @@
   "name": "training-extraterrestrial",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public",
     "d1:migrate:local": "wrangler d1 migrations apply training-extraterrestrial --local",
-    "d1:migrate:remote": "wrangler d1 migrations apply training-extraterrestrial --remote"
+    "d1:migrate:remote": "wrangler d1 migrations apply training-extraterrestrial --remote",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.0",
+    "vitest": "^4.1.9",
     "wrangler": "^4.107.1"
   }
 }

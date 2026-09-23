@@ -293,6 +293,7 @@
     if (!entry.items.some(x => x.sets.length) && !entry.notes) { toast("Nothing logged yet: tap a set number to mark it done"); return; }
     const log = getLog(); log.push(entry);
     if (!store.set(LOG, log)) { toast("Couldn't save: this browser is blocking storage"); return; }
+    if (window.SYNC) window.SYNC.queueUpsertSession(entry);
     let msg = "Saved to log";
     const rec = testsFromEntry(entry);
     if (rec) { mergeTest(rec); msg = "Saved. Test results recorded"; }
@@ -332,6 +333,7 @@
     const t = getTests(); const ex = t.find(r => r.date === rec.date);
     if (ex) Object.assign(ex.v, rec.v); else t.push(rec);
     store.set(TESTS, t);
+    if (window.SYNC) window.SYNC.queueUpsertTest(ex || rec);
   }
   const showVal = v => v == null ? "" : typeof v === "object" ? `${v.load}×${v.reps} → ${v.e1rm}` : String(v);
 
@@ -437,7 +439,9 @@
     });
     box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
       if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Tap again to delete"; return; }
-      store.set(LOG, getLog().filter(x => x.id !== b.dataset.del)); toast("Entry deleted"); render();
+      store.set(LOG, getLog().filter(x => x.id !== b.dataset.del));
+      if (window.SYNC) window.SYNC.queueDeleteSession(b.dataset.del);
+      toast("Entry deleted"); render();
     });
     $("#cpText").onclick = () => copy(exportText(), "Copied. Paste it into your chat with Claude");
     const file = () => new File([exportJSON()], `ski-strength-log-${iso(new Date())}.json`, { type: "application/json" });
@@ -459,12 +463,13 @@
   function importData(text) {
     let data; try { data = JSON.parse(text); } catch (e) { toast("That isn't valid backup JSON"); return; }
     if (!data || !Array.isArray(data.log)) { toast("No log found in that backup"); return; }
-    const log = getLog(), ids = new Set(log.map(x => x.id)); let added = 0;
-    data.log.forEach(e => { if (e && e.id && !ids.has(e.id)) { log.push(e); added++; } });
+    const log = getLog(), ids = new Set(log.map(x => x.id)); const newEntries = [];
+    data.log.forEach(e => { if (e && e.id && !ids.has(e.id)) { log.push(e); newEntries.push(e); } });
     log.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     store.set(LOG, log);
+    if (window.SYNC) newEntries.forEach(e => window.SYNC.queueUpsertSession(e));
     (data.tests || []).forEach(mergeTest);
-    toast(`Imported ${added} session${added === 1 ? "" : "s"}`); render();
+    toast(`Imported ${newEntries.length} session${newEntries.length === 1 ? "" : "s"}`); render();
   }
 
   /* ---------- shell ---------- */
@@ -473,6 +478,9 @@
     if (view === "session") renderSession(); else if (view === "log") renderLog(); else renderTests();
   }
   document.querySelectorAll(".nav button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); window.scrollTo(0, 0); });
+  // a background sync pull merged in data from another device; re-render
+  // unless we're mid-session (a live re-render there would drop focus/typing)
+  window.addEventListener("ssl:data-updated", () => { if (view !== "session") render(); });
 
   // theme: system → light → dark
   const applyTheme = t => { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); $("#themeBtn").textContent = t ? (t === "dark" ? "Dark" : "Light") : "Auto"; };

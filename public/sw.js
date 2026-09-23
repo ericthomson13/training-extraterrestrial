@@ -1,6 +1,6 @@
 /* Offline cache. Network first (2.5 s) so program updates arrive; cached copy when the gym has no signal. */
 const CACHE = "ssl-v1";
-const FILES = ["./", "index.html", "app.js", "program.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const FILES = ["./", "index.html", "app.js", "program.js", "sync.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {

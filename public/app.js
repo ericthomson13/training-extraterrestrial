@@ -194,6 +194,7 @@
           <p class="kv"><b>Mobility · 3 min</b>${esc(P.warmup.mobility)}</p>
           <p class="kv"><b>Activation · 3–4 min</b>${esc(P.warmup.act[typeForWarm])}</p>
           <p class="kv"><b>Then</b>2–4 ramp sets to the first working weight.</p>
+          <button type="button" class="ex-next" id="warmDone">✓ Done — start workout</button>
         </div>
       </details>`}
       <div id="items"></div>
@@ -211,6 +212,13 @@
     const wrap = $("#items");
     s.items.forEach((it, i) => wrap.appendChild(renderItem(s, it, d, i)));
     updateProgress(s, d);
+
+    const warmDone = $("#warmDone");
+    if (warmDone) warmDone.onclick = () => {
+      $("#warm").open = false;
+      const first = wrap.firstElementChild;
+      if (first) { first.open = true; first.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    };
 
     app.querySelectorAll("[data-week]").forEach(b => b.onclick = () => { selWeek = b.dataset.week === "S" ? "S" : +b.dataset.week; selKey = null; render(); window.scrollTo(0, 0); });
     app.querySelectorAll("[data-key]").forEach(b => b.onclick = () => { selKey = b.dataset.key; render(); });

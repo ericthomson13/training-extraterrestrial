@@ -1,0 +1,163 @@
+# Multi-season, multi-user, document-authored training programs
+
+**Status: design only, not being implemented right now.** Eric is starting real-world testing of the currently-deployed app this week; none of the schema/code changes below should be started until he's done and gives the go-ahead. This document exists to preserve the design so work can resume without re-deriving it.
+
+## Context
+
+The app currently hardcodes one season's training program as a static, per-deploy client file (`public/program.js`, loaded via `<script>` tag, never touching the database). Claude (this assistant) hand-edits that file each time the program changes, and a code deploy is required to ship any program update. `app.js` and `functions/_lib/format.js` both also hardcode a ski-specific `TEST_FIELDS` array (duplicated in two places) and several ski-specific behavioral assumptions (see "Ski-specific couplings" below).
+
+The user wants this evolved into a real product, in this order: (1) one user, many seasons, with real version history; (2) many users, each with their own seasons; (3) a defined, document-based way to author/update a program without a code deploy — Claude still designs the program in chat, but instead of hand-editing a JS file, produces a structured interchange file the app parses and validates deterministically (no LLM call at upload time). Every step must be lossless and non-breaking for the app Eric is actively using for real gym sessions today.
+
+Decisions locked in with the user: immutable version history on every program change (not just season boundaries); generalize the schema to an arbitrary sport/program shape now, not just "multi-season but still ski-shaped"; multi-user stays admin-managed via the existing Cloudflare Access allowlist (no self-serve signup — the app already scopes all data by Access-authenticated email).
+
+This design was drafted, then adversarially reviewed against the actual current codebase (`program.js`, `app.js`, `format.js`, `db.js`, `sw.js`, `0001_init.sql`, `test/apply-schema.js`). The review's findings are incorporated below; where it disagreed with the draft, its recommendation was taken.
+
+## New D1 schema (migration `0002_program.sql`, purely additive)
+
+```sql
+CREATE TABLE program (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL REFERENCES app_user(email),
+  name TEXT NOT NULL,                 -- "2026-27 Ski Season"
+  sport TEXT,                         -- freeform, nullable
+  status TEXT NOT NULL CHECK (status IN ('draft','current','archived')) DEFAULT 'draft',
+  start_date TEXT,                    -- denormalized from content, for sorting a season-history list without parsing JSON
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX idx_program_one_current_per_user ON program(user_email) WHERE status = 'current';
+
+CREATE TABLE program_version (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL REFERENCES program(id),
+  version_no INTEGER NOT NULL,
+  content TEXT NOT NULL,              -- JSON, full generalized program document (see below)
+  change_summary TEXT,                -- nullable, human-readable ("week 5 cue fix"), for the history view
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (program_id, version_no)
+);
+CREATE INDEX idx_program_version_program ON program_version(program_id);
+
+ALTER TABLE session_log ADD COLUMN program_version_id TEXT REFERENCES program_version(id); -- nullable
+ALTER TABLE test_result ADD COLUMN program_version_id TEXT REFERENCES program_version(id); -- nullable, pure provenance
+```
+
+`test_result` stays keyed by `(user_email, date)`, not owned by a program — confirmed correct by tracing `app.js`'s `latestTest()`/`getMax()`, which already scan a user's *entire* test history with no season filter (this is exactly the mechanism that lets a new season seed its starting maxes from the previous season's final tested numbers). The new column is annotation only.
+
+**Integrity mechanics** (both are real bugs the review caught in the naive version):
+- Activating a program (archive old current + activate new) must run as `env.DB.batch([archiveStmt, activateStmt])`, not two sequential `.run()` calls — D1's `batch()` is transactional; two separate calls can leave zero or two "current" programs if the worker dies mid-sequence. The partial unique index stays as a backstop; a constraint violation there becomes a 409, not a 500.
+- `version_no` assignment must be a single atomic statement, not read-then-write: `INSERT INTO program_version (..., version_no, ...) SELECT ?, ..., COALESCE(MAX(version_no),0)+1, ... FROM program_version WHERE program_id = ?`. A separate `SELECT MAX+1` followed by `INSERT` is a race under concurrent writers/retries.
+- Immutability is enforced by omission (no UPDATE endpoint on `content` ever exists), not a DB trigger. A "small edit" is just another full version — at ~16.5KB per version and a handful of edits over years, storage is a non-issue (D1 free tier is 5GB); don't build a diff/patch mechanism, it only adds bug surface for a saving that doesn't matter at this scale.
+- **`test/apply-schema.js` currently hardcodes a single `import ... from "../migrations/0001_init.sql?raw"`.** Adding `0002_program.sql` and forgetting to update this is a guaranteed footgun. Fix it to load all migration files automatically via `import.meta.glob("../migrations/*.sql", { as: "raw", eager: true })`, sorted by filename, so a future `0003` never requires touching the test harness again.
+
+## Generalized `program_version.content` JSON shape
+
+This replaces `public/program.js`'s ski-specific shape. Traced field-by-field against every real behavior in `app.js`/`format.js` to make sure nothing is silently lost:
+
+```js
+{
+  startDate: "2026-09-28",              // REQUIRED — season anchor date. Missing from the first draft; app.js's
+                                         // currentWeek()/weekStart() are entirely derived from this and there was
+                                         // nowhere for it to live in the naive shape.
+  periods: [
+    { n: 1, phase: "Normalize + test", lengthDays: 7, deload: false, noWarmupSpikes: false }
+  ],
+  ongoingPeriod: { phase: "In-season", startDate: "2026-12-14" },  // was the "S" special-case + inSeasonStart
+
+  seedMaxes: { [testKey]: value },      // was maxes:{squat,deadlift}, now arbitrary keys
+  testDefinitions: [                    // REPLACES the hardcoded TEST_FIELDS array duplicated in app.js AND
+    { key, label, unit, kind }          // functions/_lib/format.js today. kind e.g. "load-reps-e1rm" | "max-value".
+  ],
+
+  videos: { [key]: url },               // unchanged shape
+  circuits: { [key]: description },     // NEW — generalizes the single hardcoded `meCircuit` string so more than
+                                         // one circuit (or a second sport's circuits) can exist. Item option
+                                         // becomes circuit: "<key>" instead of a bare circuit:1 flag.
+  activation: { [groupKey]: description }, // NEW — generalizes warmup.act.A/B/C, which hardcoded exactly three
+                                         // session-type letters. A template now declares its own activationGroup key.
+
+  warmupTemplates: [                    // Kept as its OWN structured section — NOT folded into the exercise
+    {                                   // segment list. The review pushed back on unifying warm-up with exercises:
+      key: "ergA",                      // an erg ramp table + mobility string + activation lookup doesn't map onto
+      erg: [[timeLabel, desc, rpeLabel, isSpike]],  // {name,rx,options} without losing structure or turning
+      mobility: "...",                  // `options` into a dumping ground.
+      activationGroup: "A"              // -> looks up activation["A"]
+    }
+  ],
+
+  sessionTemplates: [
+    {
+      key: "A", title: "Squat, hinge, power",
+      scope: { type: "period", n: 1 } | { type: "periodRange", periods: [2,3,4] },  // unifies today's
+                                         // "singles" (one-off, period-specific) and "blocks.sessions" (recurring)
+      warmupTemplate: "ergA" | null,     // was noWarmup (inverted + explicit reference instead of a bare flag)
+      noWarmupSpikes: false,             // EXPLICIT flag — today this is inferred from `type === "C"`, a ski-only
+                                         // convention with no meaning in a generic schema. Must be authored data.
+      testDayNote: null,                 // moves today's hardcoded "Test day: add a second block..." string
+                                         // (currently literal copy inside app.js) into program data
+      isTest: false,
+      items: [
+        {
+          name: "Back squat",
+          rx: "2×5 RPE 6" | { "2": "4×6 @ 70%", "3": "4×6 @ 72.5%", "4": "4×5 @ 77.5%" },  // rx-per-period is now
+                                         // keyed by PERIOD NUMBER, not a positional array index. Today's
+                                         // `blk.weeks.indexOf(w)` positional lookup is fragile — a non-contiguous
+                                         // range or an off-by-one silently mis-assigns a prescription with no
+                                         // error. Keying by period number can't misalign.
+          options: { bw: 1, u: "s", norpe: 1, lift: "squat", t: "k2wL", v: "hpc", n: "cue text", circuit: "meA", pct: 0.7 }
+                                         // OPEN bag — the validator checks known keys' types but must allow
+                                         // additional properties. A closed enum of legal option keys would force
+                                         // a schema-version bump every time a new sport needs a new concept,
+                                         // which defeats "generalize now."
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Ski-specific couplings found and their generalized replacement
+
+| Today (ski-only, hardcoded in app.js/format.js) | Generalized replacement |
+|---|---|
+| `season.start` used directly, uniform 7-day weeks (`Math.floor(days/7)+1`) | `content.startDate` + per-period `lengthDays`; `currentWeek()` becomes a cumulative walk over `periods`, not division — a real logic rewrite, not just a rename |
+| `blk.weeks.indexOf(w)` positional rx-array indexing | `rx` keyed by period number (object map) |
+| `noSpikes = s.me || deload || s.type === "C"` (infers meaning from a ski-only type letter) | explicit `noWarmupSpikes` boolean per template |
+| `meCircuit` — one global hardcoded string | `circuits: {key: description}` map, same pattern as `videos` |
+| `warmup.act.A/B/C` — exactly three hardcoded letters | `activation: {groupKey: description}`, referenced by each warm-up template's own `activationGroup` |
+| `"Test day: add a second block of 3 spikes..."` literal string in `app.js` | `testDayNote` field on the session template |
+| `TEST_FIELDS` array, duplicated in `app.js` and `functions/_lib/format.js` | `testDefinitions` lives once, in program content; both places read it instead of hardcoding it |
+
+## New backend endpoints (`functions/api/programs/`)
+
+- `POST /api/programs` — create a draft program + version 1 (validates `content` against the documented schema: required fields present, referenced `video`/`circuit`/`activation`/`testDefinition` keys resolve, option-bag types checked with additional properties allowed).
+- `POST /api/programs/:id/versions` — append a new immutable version to an existing program (every call creates a new version; no "is this meaningful" logic).
+- `POST /api/programs/:id/activate` — flip to `current`, archive the prior current, via `DB.batch()`.
+- `GET /api/programs/current` — the live program's latest version content; this is what the PWA fetches once Phase B cuts over.
+- `GET /api/programs` — list a user's programs (name, sport, status, start_date, version count) for a season-history view.
+
+## New client module: `public/programEngine.js`
+
+The generic-schema interpretation logic (cumulative period walk for `currentWeek()`/`weekStart()`, phase lookup, %-of-max target computation, rx-per-period-number resolution) is factored out of `app.js`'s render functions into its own pure, unit-testable module — not wired into the live UI yet when first written (see Phase A2). `app.js` and `functions/_lib/format.js` both come to depend on `testDefinitions` from program content instead of their current hardcoded/duplicated `TEST_FIELDS` array.
+
+## Phased rollout
+
+**Phase A — schema only.** Add `0002_program.sql` (additive DDL above), fix `test/apply-schema.js`'s migration loading. No data transform, no client-visible change. Trivially rollback-safe (new tables can be dropped; new columns are nullable additions to existing tables).
+
+**Phase A2 — transform + parity-test, before any real data moves.** Write the `program.js → content` transform and `programEngine.js`. Write a golden-master test: for every real `(week, key)` combination in the actual live 2026-27 season, assert the old `getSession()`-derived output and the new engine's output are equivalent (same items, same rx per period, same targets). Only after this passes, insert the transformed content as `program_id=<new>, version_no=1, status='current'` for the real user. This is the step that actually protects against silently corrupting Eric's running season — a reindexing or option-mapping bug here would otherwise ship invisibly.
+
+**Phase B — read-path cutover only.** Swap `app.js` from `window.PROGRAM` to fetching `/api/programs/current`, behind a simple feature flag revertible without a redeploy. No bespoke offline-merge machinery needed: `sw.js`'s existing network-first-with-timeout-then-cache-fallback already covers this endpoint for free, the same way it already does for `/api/sessions`/`/api/tests` — program content has no local mutations to reconcile (only Claude "writes" it), so it doesn't need `sync.js`'s queue/merge logic. Add one small stash of the last successful fetch in `localStorage` for the cold-start-with-empty-SW-cache case. `functions/_lib/format.js`'s export also switches to reading `testDefinitions` from the current program version instead of its hardcoded array. Keep `public/program.js` in the repo as an emergency rollback path for one release cycle.
+
+**Phase C — multi-user checklist.** Small, since `user_email` is already the tenant boundary everywhere. Confirm the empty state for a brand-new user with zero programs (no seed program by default — clear "no program yet" messaging, not a crash), confirm the program endpoints respect the same email-scoping pattern as `db.js`'s existing functions, document the "add an email to the Access policy" onboarding step.
+
+**Phase D — ingestion format + upload UI.** Document the interchange JSON schema (the shape above) as the contract Claude produces; build the deterministic validator described under the endpoints; build the upload UI (paste/upload → validate → create draft → review → activate); retire whatever manual/interim insert path was used to seed Phase A2's data.
+
+**Phase E (later, ask first)** — richer authoring UX, season-comparison views, anything beyond what's needed for the above to work. Not planned in detail here.
+
+## Verification
+
+- Phase A: migrations apply cleanly to both local and remote D1 with no data loss on existing tables; `npm test` picks up the new migration automatically via the glob-based loader.
+- Phase A2: golden-master parity test passes for every real week/session-key combination in the current live season before any production insert; manually diff a sample of old-vs-new rendered sessions.
+- Phase B: with the feature flag on, the app behaves identically to today in a side-by-side comparison; airplane-mode test confirms the program still loads from cache; flipping the flag off instantly reverts to the static file with no redeploy.
+- Phase C: create a second Access-allowlisted test email, confirm it sees an empty/no-program state and cannot see the first user's program or logs.
+- Phase D: round-trip a Claude-authored interchange file through validation → draft → activate, confirm the app renders it correctly, confirm an intentionally malformed file (bad option type, dangling video/circuit key reference) is rejected with a clear error rather than silently accepted.

@@ -5,7 +5,7 @@
             lift = key into maxes for % targets, t = test key, v = video key, n = cue,
             desc = long-form clarification, shown on tap-hold (mobile) or hover (desktop) */
 window.PROGRAM = {
-  version: "2026-09-23",
+  version: "2026-09-24",
   // Season shape lives here, not hardcoded in app.js, so a future season is a
   // new program.js with no app.js changes: different week count, different
   // phase labels, a different in-season start date, all just data.
@@ -27,7 +27,7 @@ window.PROGRAM = {
     ]
   },
   // e1RM in lb. Filled in after testing; the app's own test results take priority.
-  maxes: { squat: null, deadlift: null },
+  maxes: { squat: 240, deadlift: null }, // squat provisional from W1D1 (185×5 ≈ RPE 6); the W1D2 test overrides it
 
   videos: {
     hpc: "https://www.youtube.com/watch?v=efHjodEVf9w",
@@ -71,7 +71,7 @@ window.PROGRAM = {
     { week: 1, key: "D1", title: "Normalization", type: "A", items: [
       ["Hang power clean (light, crisp)", "5×3 RPE 6", { v: "hpc", n: "Work up from PVC → empty bar: RDL to mid-thigh, jump shrug, high pull, then the clean." }],
       ["Back squat", "2×5 RPE 6", { lift: "squat", n: "Work up in sets of 5 to RPE 6, then 2 sets there." }],
-      ["Romanian deadlift", "3×8 RPE 6"],
+      ["Barbell RDL (both legs)", "3×8 RPE 6", { desc: "Romanian deadlift with a barbell, both feet on the floor: soft knees, push the hips back and slide the bar down to mid-shin, then stand up. Not the single-leg version — do every rep with both legs together, not alternating sides." }],
       ["Split squat, bodyweight", "2×10/leg", { bw: 1, v: "kot" }],
       ["Push-ups", "3×10", { bw: 1 }],
       ["Strict pull-ups", "3×(max − 2)", { bw: 1 }],
@@ -88,9 +88,9 @@ window.PROGRAM = {
       ["Single-leg hop, left", "3×1", { bw: 1, u: "in", norpe: 1, t: "hopL", n: "Landing must be stuck to count." }],
       ["Single-leg hop, right", "3×1", { bw: 1, u: "in", norpe: 1, t: "hopR" }],
       ["Lateral line hops, 30 s", "1×1", { bw: 1, u: "touches", norpe: 1, t: "lathops" }],
-      ["Back squat 5RM", "3×5", { lift: "squat", t: "squat", n: "Ramp: bar ×10, 40% ×5, 55% ×5, 70% ×3, then up to 3 attempts. Stop at RPE 9. Rest 3–4 min." }],
-      ["Deadlift 5RM", "3×5", { lift: "deadlift", t: "deadlift", n: "Same ramp. Flat back is non-negotiable." }],
-      ["Strict pull-up, max reps", "1×1", { bw: 1, norpe: 1, t: "pullup", n: "More than 10? Add a weighted 3RM next session." }]
+      ["Back squat 5RM", "3×5", { lift: "squat", t: "squat", n: "Ramp: bar ×10, 95×5, 135×5, 165×3. Attempts ~205 → 215 → 225. Stop at RPE 9. Rest 3–4 min." }],
+      ["Deadlift 5RM", "3×5", { lift: "deadlift", t: "deadlift", n: "Ramp: 135×5, 185×5, 225×3. Attempts ~245 → 265 → 285. Stop at RPE 9. Flat back is non-negotiable." }],
+      ["Strict pull-up, max reps", "1×1", { bw: 1, norpe: 1, t: "pullup", n: "One all-out set: full hang to chin over bar." }]
     ]},
     { week: 1, key: "D3", title: "Single-leg + ski test", type: "B", test: true, items: [
       ["RFESS 8RM (lb per DB)", "3×8", { t: "rfess", v: "rfess", n: "Test each leg; log the weaker side's load.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
@@ -98,12 +98,15 @@ window.PROGRAM = {
       ["Single-arm row 8RM", "3×8", { t: "row" }],
       ["Wall sit 90°, to failure", "1×1", { bw: 1, u: "s", norpe: 1, t: "wallsit" }],
       ["Side plank, left", "1×1", { bw: 1, u: "s", norpe: 1, t: "sideL" }],
-      ["Side plank, right", "1×1", { bw: 1, u: "s", norpe: 1, t: "sideR" }]
+      ["Side plank, right", "1×1", { bw: 1, u: "s", norpe: 1, t: "sideR" }],
+      ["Knee-to-wall, left", "1×1", { bw: 1, u: "cm", norpe: 1, t: "k2wL", v: "k2w", n: "Skipped on Day 1, so test it here." }],
+      ["Knee-to-wall, right", "1×1", { bw: 1, u: "cm", norpe: 1, t: "k2wR", v: "k2w" }],
+      ["Tib raises against wall, max", "1×1", { bw: 1, norpe: 1, t: "tib", v: "tib" }]
     ]},
     { week: 8, key: "D1", title: "Deload", type: "A", items: [
       ["Power clean", "3×2 RPE 6", { v: "pc" }],
       ["Back squat", "3×3 RPE 6", { lift: "squat" }],
-      ["Romanian deadlift", "2×5 RPE 6"],
+      ["Barbell RDL (both legs)", "2×5 RPE 6", { desc: "Romanian deadlift with a barbell, both feet on the floor: soft knees, push the hips back and slide the bar down to mid-shin, then stand up. Not the single-leg version — do every rep with both legs together, not alternating sides." }],
       ["Copenhagen plank, long lever", "2×20 s", { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Long lever = leg straight (harder than bent-knee)." }],
       ["Pull-up", "3×5 RPE 6", { bw: 1 }]
     ]},
@@ -124,7 +127,7 @@ window.PROGRAM = {
       ["RFESS", "2×5/leg RPE 8", { v: "rfess", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
       ["Nordic curl", "2×4", { bw: 1, v: "nordic", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
       ["Copenhagen plank", "2×20 s", { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it." }],
-      ["Weighted pull-up", "3×3 RPE 8"]
+      ["Pull-up (weighted once 5×5 is easy)", "3×4 RPE 8"]
     ]},
     { week: "S", key: "M2", title: "Maintenance: ME + isometric", type: "C", me: true, items: [
       ["Overcoming isometric: quarter squat into pins", "4×6 s", { bw: 1, u: "s", v: "iso", n: "Pins at ski-stance knee angle (~110–120°). Max push.", desc: "Push maximally against an immovable barbell set on safety pins — the bar doesn't move; the point is max effort against a fixed load." }],
@@ -151,13 +154,13 @@ window.PROGRAM = {
   blocks: [
     { weeks: [2, 3, 4], sessions: {
       A: { title: "Squat, hinge, power", items: [
-        ["Hang power clean", ["5×3 RPE 6", "5×3 RPE 6–7", "5×3 RPE 7"], { v: "hpc", n: "Stop a set if the bar path drifts." }],
+        ["Hang power clean", ["5×3 RPE 6", "5×3 RPE 6–7", "5×3 RPE 7"], { v: "hpc", n: "Technique block: stay around 95–135 lb, fast and crisp. Stop a set if the bar path drifts.", desc: "Start standing with the bar at mid-thigh, jump it up, and catch it on the front of your shoulders in a quarter squat. Power = shallow catch, not a full squat." }],
         ["Box jump (step down)", ["3×3", "4×3", "4×3"], { bw: 1, n: "Mid-shin to knee height. Land quiet and stick." }],
         ["Back squat, 3 s lower", ["4×6 @ 70%", "4×6 @ 72.5%", "4×5 @ 77.5%"], { lift: "squat", n: "3 min rest." }],
-        ["Romanian deadlift", ["3×8 RPE 6", "3×8 RPE 7", "3×6 RPE 7"], { n: "Hinge, don't squat it." }],
+        ["Barbell RDL (both legs)", ["3×8 RPE 6", "3×8 RPE 7", "3×6 RPE 7"], { n: "Hinge, don't squat it. Start ~95–115 lb.", desc: "Romanian deadlift with a barbell, both feet on the floor: soft knees, push the hips back and slide the bar down to mid-shin, then stand up. Not the single-leg version — do every rep with both legs together, not alternating sides." }],
         ["Nordic curl (GHD)", ["2×3", "3×3", "3×4"], { bw: 1, v: "nordic", n: "Eccentric only; hands catch.", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
         ["Copenhagen plank, short lever", ["3×20 s", "3×25 s", "3×30 s"], { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Short lever = knee bent (easier than straight-leg)." }],
-        ["Pallof press (cable)", ["3×10/side", "3×10/side", "3×12/side"]],
+        ["Pallof press (cable)", ["3×10/side", "3×10/side", "3×12/side"], { desc: "Stand side-on to a cable at chest height, hold the handle at your chest and press it straight out, resisting the pull that tries to twist you. A core anti-rotation drill." }],
         ["Tib raise", ["2×20", "2×20", "3×20"], { bw: 1, v: "tib" }],
         ["Bent-knee calf raise", ["2×15", "2×15", "3×15"], { v: "calf", n: "2 s pause at the bottom." }]
       ]},
@@ -167,7 +170,7 @@ window.PROGRAM = {
         ["RFESS, 3 s lower", ["3×8 ~85% of 8RM", "3×8 RPE 7", "3×6 RPE 7"], { v: "rfess", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Cossack squat", ["3×5/side", "3×6/side", "3×6/side light goblet"], { v: "cossack", n: "Heel down, go as deep as you own.", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
         ["Lateral step-down, 8\" box", ["2×8/side", "3×8/side", "3×10/side"], { bw: 1, v: "stepdown", n: "Knee over 2nd toe, 3 s down." }],
-        ["Pull-up, strict or weighted", ["4×5 RPE 7", "4×5 RPE 7", "4×4 RPE 7–8"], { n: "Superset with DB bench." }],
+        ["Pull-up: strict reps + negatives", ["5×2 + 3 negatives", "5×3 + 3 negatives", "5×3 + 3 negatives"], { bw: 1, n: "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps. Superset with DB bench.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
         ["DB bench", ["3×8 RPE 7", "3×8 RPE 7", "3×6 RPE 7–8"]],
         ["Single-arm row", ["3×10", "3×10", "3×8"]],
         ["GHD back extension", ["3×10", "3×12", "3×12"], { bw: 1 }],
@@ -198,7 +201,7 @@ window.PROGRAM = {
         ["Lateral box hop, low box", ["3×6", "3×8", "3×8"], { bw: 1, n: "Precision." }],
         ["RFESS", ["4×6 RPE 7–8", "4×5 RPE 8", "4×4 RPE 8"], { v: "rfess", n: "Heaviest single-leg day.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Lateral lunge, DB", ["3×6/side", "3×6/side", "3×5/side"]],
-        ["Weighted pull-up", ["5×3 RPE 8", "5×3 RPE 8", "4×3 RPE 8"], { n: "Superset with DB bench." }],
+        ["Pull-up (add weight once 5×5 strict is easy)", ["5×3 RPE 8", "5×4 RPE 8", "5×4 RPE 8"], { n: "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives. Superset with DB bench.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
         ["DB bench", ["3×6", "3×6", "3×5"]],
         ["Ring row or single-arm row", ["3×8", "3×8", "3×8"]],
         ["GHD back extension, weighted", ["3×10", "3×10", "3×8"]]
@@ -217,7 +220,7 @@ window.PROGRAM = {
         ["Power clean", ["5×2 RPE 8", "6×1 RPE 8", "4×2 RPE 7–8"], { v: "pc" }],
         ["Back squat → 3 box jumps (contrast)", ["4×3 @ 85%", "4×2 @ 88%", "3×2 @ 88%"], { lift: "squat", n: "Jump 60–90 s after each squat set." }],
         ["Depth jump, 12\" box", ["3×3", "3×4", "3×3"], { bw: 1, n: "Minimal ground contact, rebound up." }],
-        ["Romanian deadlift", ["3×5 RPE 7", "3×5 RPE 7–8", "2×5 RPE 7"]],
+        ["Barbell RDL (both legs)", ["3×5 RPE 7", "3×5 RPE 7–8", "2×5 RPE 7"], { desc: "Romanian deadlift with a barbell, both feet on the floor: soft knees, push the hips back and slide the bar down to mid-shin, then stand up. Not the single-leg version — do every rep with both legs together, not alternating sides." }],
         ["Nordic curl", ["2×5", "2×5", "2×4"], { bw: 1, v: "nordic", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
         ["Copenhagen plank, long lever", ["3×25 s", "3×30 s", "2×30 s"], { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Long lever = leg straight (harder than bent-knee)." }]
       ]},
@@ -226,7 +229,7 @@ window.PROGRAM = {
         ["Clock hops, single leg", ["2×1 lap/leg", "3×1 lap/leg", "2×1 lap/leg"], { bw: 1, u: "laps", n: "Hop to 12, 3, 6, 9; stick each." }],
         ["RFESS → skater jumps (contrast)", ["3×4 RPE 8", "3×4 RPE 8", "2×4 RPE 8"], { v: "rfess", n: "Then 3–4 skater jumps/side.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Cossack squat, loaded", ["3×5/side", "3×5/side", "2×5/side"], { v: "cossack", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
-        ["Weighted pull-up", ["4×3 RPE 8", "4×3 RPE 8", "3×3 RPE 8"]],
+        ["Pull-up (weighted once 5×5 is easy)", ["4×4 RPE 8", "4×5 RPE 8", "3×5 RPE 8"]],
         ["DB bench", ["3×5", "3×5", "2×5"]]
       ]},
       C: { title: "Heavy isometric + eccentric (3-day weeks only)", items: [

@@ -266,13 +266,14 @@
     el.innerHTML = `
       <summary>
         <div class="ex-top">
-          <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}</div>
+          <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
           <div class="ex-actions">
             <span class="ex-done-badge" hidden>✓ Done</span>
             ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
             <span class="disclosure" aria-hidden="true"></span>
           </div>
         </div>
+        ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
         <div class="rx">${esc(it.rx)}</div>
         <div class="meta">
           ${tgt ? `<span class="tag target">Target ${tgt} lb</span>` : ""}
@@ -300,6 +301,38 @@
         <textarea data-f="note" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>
         <button type="button" class="ex-next" data-act="next" aria-label="${isLast ? "Mark done" : "Mark done and go to next exercise"}">✓ Done${isLast ? "" : " — next exercise"}</button>
       </div>`;
+
+    // Exercise-name clarification: hover or keyboard focus shows it (desktop);
+    // a long-press shows it as a temporary peek (mobile); a quick tap/click or
+    // Enter/Space pins it open until tapped again. stopPropagation keeps the
+    // button from also toggling the enclosing <details> disclosure.
+    const infoBtn = el.querySelector(".ex-info");
+    if (infoBtn) {
+      const descEl = el.querySelector(".ex-desc");
+      let longPressTimer = null, longPressFired = false;
+      const showDesc = () => { descEl.hidden = false; infoBtn.setAttribute("aria-expanded", "true"); };
+      const hideDesc = () => { descEl.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); };
+      infoBtn.onclick = e => {
+        e.preventDefault(); e.stopPropagation();
+        if (longPressFired) { longPressFired = false; return; }
+        descEl.hidden ? showDesc() : hideDesc();
+      };
+      infoBtn.onmouseenter = showDesc;
+      infoBtn.onmouseleave = () => { if (document.activeElement !== infoBtn) hideDesc(); };
+      infoBtn.onfocus = showDesc;
+      infoBtn.onblur = hideDesc;
+      infoBtn.ontouchstart = e => {
+        e.stopPropagation();
+        longPressFired = false;
+        longPressTimer = setTimeout(() => { longPressFired = true; showDesc(); }, 450);
+      };
+      infoBtn.ontouchend = e => {
+        e.stopPropagation();
+        clearTimeout(longPressTimer);
+        if (longPressFired) hideDesc();
+      };
+      infoBtn.ontouchcancel = () => { clearTimeout(longPressTimer); longPressFired = false; };
+    }
 
     const doneBadge = el.querySelector(".ex-done-badge");
     // "done" isn't color-only (WCAG 1.4.1): the badge is real text, not a

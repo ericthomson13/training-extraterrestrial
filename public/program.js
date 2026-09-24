@@ -2,7 +2,8 @@
    Claude updates this file (maxes, new blocks); the app reads it.
    Item: [name, rx (string, or array per week of the block), options]
    options: bw = no load field, u = unit for the reps field, norpe = hide RPE,
-            lift = key into maxes for % targets, t = test key, v = video key, n = cue */
+            lift = key into maxes for % targets, t = test key, v = video key, n = cue,
+            desc = long-form clarification, shown on tap-hold (mobile) or hover (desktop) */
 window.PROGRAM = {
   version: "2026-09-23",
   // Season shape lives here, not hardcoded in app.js, so a future season is a
@@ -78,8 +79,8 @@ window.PROGRAM = {
       ["Knee-to-wall, right", "1×1", { bw: 1, u: "cm", norpe: 1, t: "k2wR", v: "k2w" }],
       ["Single-leg stance eyes closed, left", "1×1", { bw: 1, u: "s", norpe: 1, t: "stanceL", n: "Max 60 s." }],
       ["Single-leg stance eyes closed, right", "1×1", { bw: 1, u: "s", norpe: 1, t: "stanceR" }],
-      ["Copenhagen short lever, left", "1×1", { bw: 1, u: "s", norpe: 1, t: "cphL", v: "cph" }],
-      ["Copenhagen short lever, right", "1×1", { bw: 1, u: "s", norpe: 1, t: "cphR", v: "cph" }],
+      ["Copenhagen short lever, left", "1×1", { bw: 1, u: "s", norpe: 1, t: "cphL", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Short lever = knee bent (easier than straight-leg)." }],
+      ["Copenhagen short lever, right", "1×1", { bw: 1, u: "s", norpe: 1, t: "cphR", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Short lever = knee bent (easier than straight-leg)." }],
       ["Tib raises against wall, max", "1×1", { bw: 1, norpe: 1, t: "tib", v: "tib" }]
     ]},
     { week: 1, key: "D2", title: "Strength + power test", type: "A", test: true, items: [
@@ -92,7 +93,7 @@ window.PROGRAM = {
       ["Strict pull-up, max reps", "1×1", { bw: 1, norpe: 1, t: "pullup", n: "More than 10? Add a weighted 3RM next session." }]
     ]},
     { week: 1, key: "D3", title: "Single-leg + ski test", type: "B", test: true, items: [
-      ["RFESS 8RM (lb per DB)", "3×8", { t: "rfess", v: "rfess", n: "Test each leg; log the weaker side's load." }],
+      ["RFESS 8RM (lb per DB)", "3×8", { t: "rfess", v: "rfess", n: "Test each leg; log the weaker side's load.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
       ["DB bench 8RM (lb per DB)", "3×8", { t: "bench" }],
       ["Single-arm row 8RM", "3×8", { t: "row" }],
       ["Wall sit 90°, to failure", "1×1", { bw: 1, u: "s", norpe: 1, t: "wallsit" }],
@@ -103,7 +104,7 @@ window.PROGRAM = {
       ["Power clean", "3×2 RPE 6", { v: "pc" }],
       ["Back squat", "3×3 RPE 6", { lift: "squat" }],
       ["Romanian deadlift", "2×5 RPE 6"],
-      ["Copenhagen plank, long lever", "2×20 s", { bw: 1, u: "s", v: "cph" }],
+      ["Copenhagen plank, long lever", "2×20 s", { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Long lever = leg straight (harder than bent-knee)." }],
       ["Pull-up", "3×5 RPE 6", { bw: 1 }]
     ]},
     { week: 8, key: "D2", title: "Retest", type: "A", test: true, items: [
@@ -120,13 +121,13 @@ window.PROGRAM = {
       ["Power clean", "3×2 RPE 7–8", { v: "pc" }],
       ["Lateral bounds", "2×5/side", { bw: 1, v: "skater" }],
       ["Back squat", "3×3 @ 85%", { lift: "squat" }],
-      ["RFESS", "2×5/leg RPE 8", { v: "rfess" }],
-      ["Nordic curl", "2×4", { bw: 1, v: "nordic" }],
-      ["Copenhagen plank", "2×20 s", { bw: 1, u: "s", v: "cph" }],
+      ["RFESS", "2×5/leg RPE 8", { v: "rfess", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
+      ["Nordic curl", "2×4", { bw: 1, v: "nordic", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
+      ["Copenhagen plank", "2×20 s", { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it." }],
       ["Weighted pull-up", "3×3 RPE 8"]
     ]},
     { week: "S", key: "M2", title: "Maintenance: ME + isometric", type: "C", me: true, items: [
-      ["Overcoming isometric: quarter squat into pins", "4×6 s", { bw: 1, u: "s", v: "iso", n: "Pins at ski-stance knee angle (~110–120°). Max push." }],
+      ["Overcoming isometric: quarter squat into pins", "4×6 s", { bw: 1, u: "s", v: "iso", n: "Pins at ski-stance knee angle (~110–120°). Max push.", desc: "Push maximally against an immovable barbell set on safety pins — the bar doesn't move; the point is max effort against a fixed load." }],
       ["ME circuit, 15–20% BW pack", "2 rounds", { u: "rounds", norpe: 1, v: "me", circuit: 1 }],
       ["Loaded wall sit, ski angle", "2×90 s", { u: "s" }]
     ]},
@@ -137,8 +138,8 @@ window.PROGRAM = {
     ]},
     { week: "S", key: "MD", title: "Micro-dose (10–15 min, home)", type: "C", noWarmup: true, items: [
       ["Pogos", "2×20", { bw: 1 }],
-      ["Spanish squat or wall sit at ski angle", "3×45 s", { bw: 1, u: "s", v: "spanish" }],
-      ["Copenhagen plank", "2×20 s/side", { bw: 1, u: "s", v: "cph" }],
+      ["Spanish squat or wall sit at ski angle", "3×45 s", { bw: 1, u: "s", v: "spanish", desc: "Squat against a band anchored behind the knees, which lets you sit into a deep knee bend while staying upright. Targets the quads/patellar tendon." }],
+      ["Copenhagen plank", "2×20 s/side", { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it." }],
       ["Tib raise", "1×25", { bw: 1, v: "tib" }],
       ["Bent-knee calf raise", "1×15", { v: "calf" }],
       ["90/90 hip switches + ankle rocks", "1×10", { bw: 1, norpe: 1 }],
@@ -154,8 +155,8 @@ window.PROGRAM = {
         ["Box jump (step down)", ["3×3", "4×3", "4×3"], { bw: 1, n: "Mid-shin to knee height. Land quiet and stick." }],
         ["Back squat, 3 s lower", ["4×6 @ 70%", "4×6 @ 72.5%", "4×5 @ 77.5%"], { lift: "squat", n: "3 min rest." }],
         ["Romanian deadlift", ["3×8 RPE 6", "3×8 RPE 7", "3×6 RPE 7"], { n: "Hinge, don't squat it." }],
-        ["Nordic curl (GHD)", ["2×3", "3×3", "3×4"], { bw: 1, v: "nordic", n: "Eccentric only; hands catch." }],
-        ["Copenhagen plank, short lever", ["3×20 s", "3×25 s", "3×30 s"], { bw: 1, u: "s", v: "cph" }],
+        ["Nordic curl (GHD)", ["2×3", "3×3", "3×4"], { bw: 1, v: "nordic", n: "Eccentric only; hands catch.", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
+        ["Copenhagen plank, short lever", ["3×20 s", "3×25 s", "3×30 s"], { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Short lever = knee bent (easier than straight-leg)." }],
         ["Pallof press (cable)", ["3×10/side", "3×10/side", "3×12/side"]],
         ["Tib raise", ["2×20", "2×20", "3×20"], { bw: 1, v: "tib" }],
         ["Bent-knee calf raise", ["2×15", "2×15", "3×15"], { v: "calf", n: "2 s pause at the bottom." }]
@@ -163,8 +164,8 @@ window.PROGRAM = {
       B: { title: "Single-leg, lateral, upper", items: [
         ["Lateral line hops, precision", ["3×10 s", "3×12 s", "3×15 s"], { bw: 1, u: "s", n: "Accuracy over speed." }],
         ["Skater hop to stick", ["3×3/side", "3×4/side", "3×5/side"], { bw: 1, v: "skater", n: "Hold each landing 2 s over the outside foot." }],
-        ["RFESS, 3 s lower", ["3×8 ~85% of 8RM", "3×8 RPE 7", "3×6 RPE 7"], { v: "rfess" }],
-        ["Cossack squat", ["3×5/side", "3×6/side", "3×6/side light goblet"], { v: "cossack", n: "Heel down, go as deep as you own." }],
+        ["RFESS, 3 s lower", ["3×8 ~85% of 8RM", "3×8 RPE 7", "3×6 RPE 7"], { v: "rfess", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
+        ["Cossack squat", ["3×5/side", "3×6/side", "3×6/side light goblet"], { v: "cossack", n: "Heel down, go as deep as you own.", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
         ["Lateral step-down, 8\" box", ["2×8/side", "3×8/side", "3×10/side"], { bw: 1, v: "stepdown", n: "Knee over 2nd toe, 3 s down." }],
         ["Pull-up, strict or weighted", ["4×5 RPE 7", "4×5 RPE 7", "4×4 RPE 7–8"], { n: "Superset with DB bench." }],
         ["DB bench", ["3×8 RPE 7", "3×8 RPE 7", "3×6 RPE 7–8"]],
@@ -177,7 +178,7 @@ window.PROGRAM = {
         ["Knee-over-toe split squat", ["3×8/leg BW", "3×8/leg light DB", "3×8/leg"], { v: "kot", n: "Front heel down, knee past toes." }],
         ["Heel-elevated goblet squat, 4-2-1 tempo", ["3×8", "3×8", "3×8 heavier"], { n: "Heels on 10 lb plates." }],
         ["Wall sit, ski angle (~110°)", ["4×45 s", "4×60 s", "3×90 s"], { bw: 1, u: "s", n: "Shins in contact; breathe through it." }],
-        ["Single-leg RDL, DB", ["3×8/side", "3×8/side", "3×8/side"], { v: "slrdl", n: "Foot tripod; hips square." }],
+        ["Single-leg RDL, DB", ["3×8/side", "3×8/side", "3×8/side"], { v: "slrdl", n: "Foot tripod; hips square.", desc: "RDL = Romanian Deadlift, one leg at a time: hinge at the hip with a soft knee, opposite leg reaches back for balance." }],
         ["Farmer carry", ["4×40 m", "4×40 m", "4×50 m"], { u: "m", norpe: 1 }],
         ["ME primer: box step-ups 16–20\"", ["—", "2×1 min BW", "3×1 min 10% BW"], { u: "min", v: "me" }]
       ]}
@@ -188,14 +189,14 @@ window.PROGRAM = {
         ["Depth drop to stick, 12\" box", ["3×3", "3×4", "4×3"], { bw: 1, n: "Absorb; no rebound yet." }],
         ["Back squat", ["5×5 @ 80%", "5×4 @ 82.5%", "4×3 @ 87%"], { lift: "squat", n: "3–4 min rest." }],
         ["Deadlift", ["4×4 @ 80%", "4×3 @ 83%", "3×3 @ 87%"], { lift: "deadlift" }],
-        ["Nordic curl", ["3×4", "3×5", "3×5"], { bw: 1, v: "nordic" }],
-        ["Copenhagen plank, long lever", ["3×15 s", "3×20 s", "3×25 s"], { bw: 1, u: "s", v: "cph" }],
+        ["Nordic curl", ["3×4", "3×5", "3×5"], { bw: 1, v: "nordic", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
+        ["Copenhagen plank, long lever", ["3×15 s", "3×20 s", "3×25 s"], { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Long lever = leg straight (harder than bent-knee)." }],
         ["Barbell rollout (knees)", ["3×6", "3×8", "3×8"], { bw: 1 }]
       ]},
       B: { title: "Heavy single-leg + lateral + upper", items: [
         ["Lateral bound to stick", ["4×3/side", "4×4/side", "4×4/side"], { bw: 1, v: "skater", n: "Only as far as you can stick silently." }],
         ["Lateral box hop, low box", ["3×6", "3×8", "3×8"], { bw: 1, n: "Precision." }],
-        ["RFESS", ["4×6 RPE 7–8", "4×5 RPE 8", "4×4 RPE 8"], { v: "rfess", n: "Heaviest single-leg day." }],
+        ["RFESS", ["4×6 RPE 7–8", "4×5 RPE 8", "4×4 RPE 8"], { v: "rfess", n: "Heaviest single-leg day.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Lateral lunge, DB", ["3×6/side", "3×6/side", "3×5/side"]],
         ["Weighted pull-up", ["5×3 RPE 8", "5×3 RPE 8", "4×3 RPE 8"], { n: "Superset with DB bench." }],
         ["DB bench", ["3×6", "3×6", "3×5"]],
@@ -206,7 +207,7 @@ window.PROGRAM = {
         ["Pogos", ["3×20", "3×20", "3×20"], { bw: 1 }],
         ["Knee-over-toe split squat", ["2×8/leg", "2×8/leg", "2×8/leg"], { v: "kot" }],
         ["ME circuit", ["2 rounds @ 10% BW (~20 lb)", "3 rounds @ 12.5% BW (~25 lb)", "3 rounds @ 15% BW (~30 lb)"], { u: "rounds", norpe: 1, v: "me", circuit: 1, n: "Sore more than 48 h? Repeat this week instead of progressing." }],
-        ["Single-leg RDL, heavy", ["3×6/side", "3×6/side", "3×6/side"], { v: "slrdl" }],
+        ["Single-leg RDL, heavy", ["3×6/side", "3×6/side", "3×6/side"], { v: "slrdl", desc: "RDL = Romanian Deadlift, one leg at a time: hinge at the hip with a soft knee, opposite leg reaches back for balance." }],
         ["Tib raise", ["2×20", "2×20", "2×20"], { bw: 1, v: "tib" }],
         ["Bent-knee calf raise", ["2×15", "2×15", "2×15"], { v: "calf" }]
       ]}
@@ -217,19 +218,19 @@ window.PROGRAM = {
         ["Back squat → 3 box jumps (contrast)", ["4×3 @ 85%", "4×2 @ 88%", "3×2 @ 88%"], { lift: "squat", n: "Jump 60–90 s after each squat set." }],
         ["Depth jump, 12\" box", ["3×3", "3×4", "3×3"], { bw: 1, n: "Minimal ground contact, rebound up." }],
         ["Romanian deadlift", ["3×5 RPE 7", "3×5 RPE 7–8", "2×5 RPE 7"]],
-        ["Nordic curl", ["2×5", "2×5", "2×4"], { bw: 1, v: "nordic" }],
-        ["Copenhagen plank, long lever", ["3×25 s", "3×30 s", "2×30 s"], { bw: 1, u: "s", v: "cph" }]
+        ["Nordic curl", ["2×5", "2×5", "2×4"], { bw: 1, v: "nordic", desc: "Kneeling hamstring curl: anchor your ankles, lower your torso forward as slowly as you can control, catch yourself with your hands at the bottom." }],
+        ["Copenhagen plank, long lever", ["3×25 s", "3×30 s", "2×30 s"], { bw: 1, u: "s", v: "cph", desc: "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Long lever = leg straight (harder than bent-knee)." }]
       ]},
       B: { title: "Lateral reactive + single-leg", items: [
         ["Continuous lateral bounds", ["3×6", "4×6", "3×6"], { bw: 1, v: "skater", n: "Rhythm like short-radius turns." }],
         ["Clock hops, single leg", ["2×1 lap/leg", "3×1 lap/leg", "2×1 lap/leg"], { bw: 1, u: "laps", n: "Hop to 12, 3, 6, 9; stick each." }],
-        ["RFESS → skater jumps (contrast)", ["3×4 RPE 8", "3×4 RPE 8", "2×4 RPE 8"], { v: "rfess", n: "Then 3–4 skater jumps/side." }],
-        ["Cossack squat, loaded", ["3×5/side", "3×5/side", "2×5/side"], { v: "cossack" }],
+        ["RFESS → skater jumps (contrast)", ["3×4 RPE 8", "3×4 RPE 8", "2×4 RPE 8"], { v: "rfess", n: "Then 3–4 skater jumps/side.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
+        ["Cossack squat, loaded", ["3×5/side", "3×5/side", "2×5/side"], { v: "cossack", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
         ["Weighted pull-up", ["4×3 RPE 8", "4×3 RPE 8", "3×3 RPE 8"]],
         ["DB bench", ["3×5", "3×5", "2×5"]]
       ]},
       C: { title: "Heavy isometric + eccentric (3-day weeks only)", items: [
-        ["Overcoming isometric: quarter squat into pins", ["5×5 s", "5×6 s", "4×6 s"], { bw: 1, u: "s", v: "iso", n: "Pins at ~110–120° knee angle; push max." }],
+        ["Overcoming isometric: quarter squat into pins", ["5×5 s", "5×6 s", "4×6 s"], { bw: 1, u: "s", v: "iso", n: "Pins at ~110–120° knee angle; push max.", desc: "Push maximally against an immovable barbell set on safety pins — the bar doesn't move; the point is max effort against a fixed load." }],
         ["Wall sit, ski angle, plate on thighs", ["3×60 s", "3×75 s", "2×90 s"], { u: "s", n: "Plate 25–45 lb." }],
         ["Eccentric step-down with pack, 16\"", ["3×8/leg", "3×8/leg", "2×8/leg"], { v: "stepdown", n: "4 s down." }],
         ["ME circuit, 15–20% BW", ["2 rounds", "2 rounds", "—"], { u: "rounds", norpe: 1, v: "me", circuit: 1, n: "Skip on weeks with a long skin." }]

@@ -158,6 +158,15 @@ This matters once program content stops being a file only Claude hand-edits and 
 
 The generic-schema interpretation logic (cumulative period walk for `currentWeek()`/`weekStart()`, phase lookup, %-of-max target computation, rx-per-period-number resolution) is factored out of `app.js`'s render functions into its own pure, unit-testable module — not wired into the live UI yet when first written (see Phase A2). `app.js` and `functions/_lib/format.js` both come to depend on `testDefinitions` from program content instead of their current hardcoded/duplicated `TEST_FIELDS` array.
 
+## "Getting Started" nav tab
+
+A fourth bottom-nav tab, always present (Session / Log / Tests / Getting Started) for every user, not just first-run — added at Eric's request while approving this plan. It's the general program-management surface, not a one-time onboarding screen:
+
+- **No current program**: shows onboarding content plus a starter-prompt document (Eric will supply a `.md` file, analogous to `PROGRAM_FORMAT.md`, aimed at a user with no personal coach — something they can copy and hand to Claude to design their first program from scratch) and the upload flow to submit the result.
+- **Has a current program**: shows the program list (name, sport, status, start date — from `GET /api/programs`), which one is active, and the same upload/switch/activate flow from here — this is where Phase D's ingestion UI lives, rather than a separate settings screen invented for it.
+
+Because this needs `GET /api/programs`/`GET /api/programs/current` to mean anything, the tab itself (with its empty state) is real UI work that lands in Phase C, and gets its full program-list/upload capability once Phase D's validator and endpoints exist. The starter-prompt `.md` content is a copy asset from Eric, not something to draft speculatively.
+
 ## Phased rollout
 
 **Phase A — schema only.** Add `0002_program.sql` (additive DDL above), fix `test/apply-schema.js`'s migration loading. No data transform, no client-visible change. Trivially rollback-safe (new tables can be dropped; new columns are nullable additions to existing tables).
@@ -166,9 +175,9 @@ The generic-schema interpretation logic (cumulative period walk for `currentWeek
 
 **Phase B — read-path cutover only.** Swap `app.js` from `window.PROGRAM` to fetching `/api/programs/current`, behind a simple feature flag revertible without a redeploy. No bespoke offline-merge machinery needed: `sw.js`'s existing network-first-with-timeout-then-cache-fallback already covers this endpoint for free, the same way it already does for `/api/sessions`/`/api/tests` — program content has no local mutations to reconcile (only Claude "writes" it), so it doesn't need `sync.js`'s queue/merge logic. Add one small stash of the last successful fetch in `localStorage` for the cold-start-with-empty-SW-cache case. `functions/_lib/format.js`'s export also switches to reading `testDefinitions` from the current program version instead of its hardcoded array. Keep `public/program.js` in the repo as an emergency rollback path for one release cycle.
 
-**Phase C — multi-user checklist.** Small, since `user_email` is already the tenant boundary everywhere. Confirm the empty state for a brand-new user with zero programs (no seed program by default — clear "no program yet" messaging, not a crash), confirm the program endpoints respect the same email-scoping pattern as `db.js`'s existing functions, document the "add an email to the Access policy" onboarding step.
+**Phase C — multi-user checklist + the Getting Started tab's empty state.** Confirm the program endpoints respect the same email-scoping pattern as `db.js`'s existing functions (small, since `user_email` is already the tenant boundary everywhere), document the "add an email to the Access policy" onboarding step, and build the actual "Getting Started" nav tab (see above) with its no-program empty state — no seed program by default, clear messaging, not a crash.
 
-**Phase D — ingestion format + upload UI.** Document the interchange JSON schema (the shape above, plus `displayName`) as the contract Claude produces — a `.json` file, not `.js` — matching a new JSON-object version of `PROGRAM_FORMAT.md`'s conventions; build the deterministic validator described under the endpoints, including every sanitization rule in "Security" above; build the upload UI (paste/upload → validate → create draft → review → activate); retire whatever manual/interim insert path was used to seed Phase A2's data.
+**Phase D — ingestion format + upload UI.** Document the interchange JSON schema (the shape above, plus `displayName`) as the contract Claude produces — a `.json` file, not `.js` — matching a new JSON-object version of `PROGRAM_FORMAT.md`'s conventions; build the deterministic validator described under the endpoints, including every sanitization rule in "Security" above; build the upload/switch/program-list UI inside the Getting Started tab (paste/upload → validate → create draft → review → activate); retire whatever manual/interim insert path was used to seed Phase A2's data. Eric supplies the starter-prompt `.md` content shown in the empty state.
 
 **Phase E (later, ask first)** — richer authoring UX, season-comparison views, anything beyond what's needed for the above to work. Not planned in detail here.
 

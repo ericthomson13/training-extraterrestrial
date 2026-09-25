@@ -1,6 +1,6 @@
 # Multi-season, multi-user, document-authored training programs
 
-**Status: design only, not being implemented right now.** Eric is starting real-world testing of the currently-deployed app this week; none of the schema/code changes below should be started until he's done and gives the go-ahead. This document exists to preserve the design so work can resume without re-deriving it.
+**Status: approved, implementation starting.** Eric completed initial real-world testing and greenlit this plan. Two amendments were folded in before implementation began: the app's top-left brand text becomes a per-program `displayName` (not hardcoded "Ski Strength"), and the interchange/storage format is explicitly JSON with documented ingestion sanitization (see "Security" below) — the risk this addresses is real once program content stops being something only Claude hand-edits and deploys, and becomes something submitted through an API endpoint.
 
 ## Context
 
@@ -54,8 +54,12 @@ ALTER TABLE test_result ADD COLUMN program_version_id TEXT REFERENCES program_ve
 
 This replaces `public/program.js`'s ski-specific shape. Traced field-by-field against every real behavior in `app.js`/`format.js` to make sure nothing is silently lost:
 
+Note: the code block below is annotated with `//` comments for readability in this document. The **actual stored/transmitted format is strict JSON** — no comments, no trailing commas, double-quoted keys and strings, no functions. See "Security" below for why this distinction is load-bearing, not stylistic.
+
 ```js
 {
+  displayName: "Ski Strength",          // NEW — the top-left brand text. Per-program, not per-user: switching
+                                         // which program is active naturally changes what the header shows.
   startDate: "2026-09-28",              // REQUIRED — season anchor date. Missing from the first draft; app.js's
                                          // currentWeek()/weekStart() are entirely derived from this and there was
                                          // nowhere for it to live in the naive shape.
@@ -128,9 +132,23 @@ This replaces `public/program.js`'s ski-specific shape. Traced field-by-field ag
 | `"Test day: add a second block of 3 spikes..."` literal string in `app.js` | `testDayNote` field on the session template |
 | `TEST_FIELDS` array, duplicated in `app.js` and `functions/_lib/format.js` | `testDefinitions` lives once, in program content; both places read it instead of hardcoding it |
 
+## Security: JSON, not JS — and ingestion sanitization
+
+This matters once program content stops being a file only Claude hand-edits and deploys, and becomes something submitted through an API endpoint that then gets stored and re-served to a browser.
+
+**JSON, not JS, at every layer.** `program_version.content` is stored as a JSON *document* — never a `.js` file containing a `window.PROGRAM = {...}` object literal, and never anything the client `eval()`s, passes to `new Function()`, or inlines into a `<script>` tag. The client always retrieves it as a `GET /api/programs/current` JSON response and reads it with `JSON.parse` as inert data. This closes off an entire class of injection where "program content" could itself smuggle in executable code — a risk that doesn't really exist today (Claude edits a file on disk, nobody else's input ever reaches it) but becomes real the moment `POST /api/programs` accepts a document from outside. The interchange artifact Claude produces for the upload flow (Phase D) is a `.json` file, not a `.js` file — `PROGRAM_FORMAT.md`'s current JS-array-tuple format describes the old static-file authoring flow and gets a JSON-object equivalent written for the new one.
+
+**Ingestion sanitization** (enforced server-side, in addition to the structural/type validation already described under the endpoints below):
+- **Control characters**: strip/reject non-printable control characters from every string field (newline/tab allowed where a field is legitimately multi-line, e.g. `desc`).
+- **Length caps**: short fields (`displayName`, `name`, `title`, `label`, `key`) capped around 200 chars; longer free-text fields (`desc`, `n`, `testDayNote`, circuit/activation descriptions) capped around 1000 chars. Bounds storage and rendering cost; a real season's content is ~16.5KB, so this is generous headroom, not a real constraint.
+- **URL scheme allowlist**: every URL field (`videos[key]`, any future link) must parse as `http://` or `https://` — reject `javascript:`, `data:`, `vbscript:`, `file:`, anything else. This is **not** the same protection as HTML-escaping: `<a href="javascript:...">` needs no HTML metacharacters to execute, so escaping the string doesn't stop it — the scheme itself has to be checked at ingestion.
+- **Render-time escaping stays in force as defense in depth, not a replacement for the above.** `app.js`'s existing `esc()` helper already HTML-escapes every string before it reaches `innerHTML`; Phase B's job is to audit that this covers every *new* field the generalized schema introduces (phase labels, `testDefinitions[].label/unit`, circuit/activation descriptions, session template `title`/`testDayNote`, item `name`/`rx`/`n`/`desc`, the new `displayName`) — not just the fields that exist today.
+- **Size cap** on the whole `content` payload (e.g. 200KB) — abuse guard, not a real constraint at current scale.
+- **Fail closed**: any validation or sanitization failure rejects the entire upload with a specific, per-field error. Never silently strip-and-accept a partially-invalid document.
+
 ## New backend endpoints (`functions/api/programs/`)
 
-- `POST /api/programs` — create a draft program + version 1 (validates `content` against the documented schema: required fields present, referenced `video`/`circuit`/`activation`/`testDefinition` keys resolve, option-bag types checked with additional properties allowed).
+- `POST /api/programs` — create a draft program + version 1 (validates `content` against the documented schema and the sanitization rules above: required fields present, types correct, referenced `video`/`circuit`/`activation`/`testDefinition` keys resolve, option-bag types checked with additional properties allowed, every string/URL field sanitized per "Security" above).
 - `POST /api/programs/:id/versions` — append a new immutable version to an existing program (every call creates a new version; no "is this meaningful" logic).
 - `POST /api/programs/:id/activate` — flip to `current`, archive the prior current, via `DB.batch()`.
 - `GET /api/programs/current` — the live program's latest version content; this is what the PWA fetches once Phase B cuts over.
@@ -150,7 +168,7 @@ The generic-schema interpretation logic (cumulative period walk for `currentWeek
 
 **Phase C — multi-user checklist.** Small, since `user_email` is already the tenant boundary everywhere. Confirm the empty state for a brand-new user with zero programs (no seed program by default — clear "no program yet" messaging, not a crash), confirm the program endpoints respect the same email-scoping pattern as `db.js`'s existing functions, document the "add an email to the Access policy" onboarding step.
 
-**Phase D — ingestion format + upload UI.** Document the interchange JSON schema (the shape above) as the contract Claude produces; build the deterministic validator described under the endpoints; build the upload UI (paste/upload → validate → create draft → review → activate); retire whatever manual/interim insert path was used to seed Phase A2's data.
+**Phase D — ingestion format + upload UI.** Document the interchange JSON schema (the shape above, plus `displayName`) as the contract Claude produces — a `.json` file, not `.js` — matching a new JSON-object version of `PROGRAM_FORMAT.md`'s conventions; build the deterministic validator described under the endpoints, including every sanitization rule in "Security" above; build the upload UI (paste/upload → validate → create draft → review → activate); retire whatever manual/interim insert path was used to seed Phase A2's data.
 
 **Phase E (later, ask first)** — richer authoring UX, season-comparison views, anything beyond what's needed for the above to work. Not planned in detail here.
 
@@ -160,4 +178,4 @@ The generic-schema interpretation logic (cumulative period walk for `currentWeek
 - Phase A2: golden-master parity test passes for every real week/session-key combination in the current live season before any production insert; manually diff a sample of old-vs-new rendered sessions.
 - Phase B: with the feature flag on, the app behaves identically to today in a side-by-side comparison; airplane-mode test confirms the program still loads from cache; flipping the flag off instantly reverts to the static file with no redeploy.
 - Phase C: create a second Access-allowlisted test email, confirm it sees an empty/no-program state and cannot see the first user's program or logs.
-- Phase D: round-trip a Claude-authored interchange file through validation → draft → activate, confirm the app renders it correctly, confirm an intentionally malformed file (bad option type, dangling video/circuit key reference) is rejected with a clear error rather than silently accepted.
+- Phase D: round-trip a Claude-authored interchange file through validation → draft → activate, confirm the app renders it correctly, confirm an intentionally malformed file (bad option type, dangling video/circuit key reference) is rejected with a clear error rather than silently accepted. Also confirm each sanitization rule independently: a `javascript:` URL in a video field is rejected, an overlong string is rejected, control characters are rejected, and a payload over the size cap is rejected — each with a specific error, not a silent strip.

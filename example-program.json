@@ -115,12 +115,12 @@
         {
           "name": "Pull-up, strict or weighted",
           "rx": { "2": "4×5 RPE 7", "3": "4×4 RPE 7", "4": "3×5 RPE 6" },
-          "options": { "n": "Add weight once 5x5 strict is easy." }
+          "options": { "group": "A", "n": "Add weight once 5x5 strict is easy." }
         },
         {
           "name": "Copenhagen plank",
           "rx": { "2": "3×20 s", "3": "3×25 s", "4": "2×20 s" },
-          "options": { "bw": 1, "u": "s", "desc": "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it." }
+          "options": { "bw": 1, "u": "s", "group": "A", "desc": "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Paired with pull-ups here -- hold the plank during your pull-up rest instead of standing around." }
         }
       ]
     },

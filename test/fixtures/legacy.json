@@ -939,7 +939,8 @@
               ],
               {
                 "bw": 1,
-                "n": "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps. Superset with DB bench.",
+                "group": "A",
+                "n": "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps.",
                 "desc": "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)."
               }
             ],
@@ -949,7 +950,10 @@
                 "3×8 RPE 7",
                 "3×8 RPE 7",
                 "3×6 RPE 7–8"
-              ]
+              ],
+              {
+                "group": "A"
+              }
             ],
             [
               "Single-arm row",
@@ -1229,7 +1233,8 @@
                 "5×4 RPE 8"
               ],
               {
-                "n": "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives. Superset with DB bench.",
+                "group": "A",
+                "n": "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives.",
                 "desc": "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)."
               }
             ],
@@ -1239,7 +1244,10 @@
                 "3×6",
                 "3×6",
                 "3×5"
-              ]
+              ],
+              {
+                "group": "A"
+              }
             ],
             [
               "Ring row or single-arm row",
@@ -1484,7 +1492,10 @@
                 "4×4 RPE 8",
                 "4×5 RPE 8",
                 "3×5 RPE 8"
-              ]
+              ],
+              {
+                "group": "A"
+              }
             ],
             [
               "DB bench",
@@ -1492,7 +1503,10 @@
                 "3×5",
                 "3×5",
                 "2×5"
-              ]
+              ],
+              {
+                "group": "A"
+              }
             ]
           ]
         },

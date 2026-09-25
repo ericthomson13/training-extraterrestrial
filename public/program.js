@@ -170,8 +170,8 @@ window.PROGRAM = {
         ["RFESS, 3 s lower", ["3×8 ~85% of 8RM", "3×8 RPE 7", "3×6 RPE 7"], { v: "rfess", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Cossack squat", ["3×5/side", "3×6/side", "3×6/side light goblet"], { v: "cossack", n: "Heel down, go as deep as you own.", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
         ["Lateral step-down, 8\" box", ["2×8/side", "3×8/side", "3×10/side"], { bw: 1, v: "stepdown", n: "Knee over 2nd toe, 3 s down." }],
-        ["Pull-up: strict reps + negatives", ["5×2 + 3 negatives", "5×3 + 3 negatives", "5×3 + 3 negatives"], { bw: 1, n: "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps. Superset with DB bench.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
-        ["DB bench", ["3×8 RPE 7", "3×8 RPE 7", "3×6 RPE 7–8"]],
+        ["Pull-up: strict reps + negatives", ["5×2 + 3 negatives", "5×3 + 3 negatives", "5×3 + 3 negatives"], { bw: 1, group: "A", n: "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
+        ["DB bench", ["3×8 RPE 7", "3×8 RPE 7", "3×6 RPE 7–8"], { group: "A" }],
         ["Single-arm row", ["3×10", "3×10", "3×8"]],
         ["GHD back extension", ["3×10", "3×12", "3×12"], { bw: 1 }],
         ["Hanging knee raise", ["3×10", "3×10", "3×12"], { bw: 1 }]
@@ -201,8 +201,8 @@ window.PROGRAM = {
         ["Lateral box hop, low box", ["3×6", "3×8", "3×8"], { bw: 1, n: "Precision." }],
         ["RFESS", ["4×6 RPE 7–8", "4×5 RPE 8", "4×4 RPE 8"], { v: "rfess", n: "Heaviest single-leg day.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Lateral lunge, DB", ["3×6/side", "3×6/side", "3×5/side"]],
-        ["Pull-up (add weight once 5×5 strict is easy)", ["5×3 RPE 8", "5×4 RPE 8", "5×4 RPE 8"], { n: "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives. Superset with DB bench.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
-        ["DB bench", ["3×6", "3×6", "3×5"]],
+        ["Pull-up (add weight once 5×5 strict is easy)", ["5×3 RPE 8", "5×4 RPE 8", "5×4 RPE 8"], { group: "A", n: "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives.", desc: "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)." }],
+        ["DB bench", ["3×6", "3×6", "3×5"], { group: "A" }],
         ["Ring row or single-arm row", ["3×8", "3×8", "3×8"]],
         ["GHD back extension, weighted", ["3×10", "3×10", "3×8"]]
       ]},
@@ -229,8 +229,8 @@ window.PROGRAM = {
         ["Clock hops, single leg", ["2×1 lap/leg", "3×1 lap/leg", "2×1 lap/leg"], { bw: 1, u: "laps", n: "Hop to 12, 3, 6, 9; stick each." }],
         ["RFESS → skater jumps (contrast)", ["3×4 RPE 8", "3×4 RPE 8", "2×4 RPE 8"], { v: "rfess", n: "Then 3–4 skater jumps/side.", desc: "Rear-Foot-Elevated Split Squat: back foot up on a bench, work the front leg. A single-leg squat, not a deadlift." }],
         ["Cossack squat, loaded", ["3×5/side", "3×5/side", "2×5/side"], { v: "cossack", desc: "Wide-stance lateral squat: sink into one bent leg while the other stays straight, then shift side to side." }],
-        ["Pull-up (weighted once 5×5 is easy)", ["4×4 RPE 8", "4×5 RPE 8", "3×5 RPE 8"]],
-        ["DB bench", ["3×5", "3×5", "2×5"]]
+        ["Pull-up (weighted once 5×5 is easy)", ["4×4 RPE 8", "4×5 RPE 8", "3×5 RPE 8"], { group: "A" }],
+        ["DB bench", ["3×5", "3×5", "2×5"], { group: "A" }]
       ]},
       C: { title: "Heavy isometric + eccentric (3-day weeks only)", items: [
         ["Overcoming isometric: quarter squat into pins", ["5×5 s", "5×6 s", "4×6 s"], { bw: 1, u: "s", v: "iso", n: "Pins at ~110–120° knee angle; push max.", desc: "Push maximally against an immovable barbell set on safety pins — the bar doesn't move; the point is max effort against a fixed load." }],

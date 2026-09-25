@@ -141,6 +141,31 @@ def reference_checks(program):
                 if extra:
                     errors.append(f"sessionTemplates[{label}].{name}: rx has periods {sorted(extra)} outside this session's scope {sorted(scope_periods)}")
 
+        # A `group` value is only meaningful across items adjacent to each
+        # other in the array -- the app renders/logs a run of consecutive
+        # same-group items as one superset block. The same group value
+        # reappearing later, non-adjacently, silently becomes a second,
+        # separate block instead of joining the first -- almost always an
+        # authoring mistake worth flagging.
+        items = session.get("items", [])
+        seen_groups = {}
+        prev_group = None
+        for ii, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            g = (item.get("options") or {}).get("group")
+            if g is None:
+                prev_group = None
+                continue
+            if g in seen_groups and prev_group != g:
+                errors.append(
+                    f"sessionTemplates[{label}]: group '{g}' appears at non-adjacent items "
+                    f"(position {seen_groups[g]} and {ii}) -- these render as two separate superset "
+                    f"blocks, not one. Move them next to each other in `items`."
+                )
+            seen_groups[g] = ii
+            prev_group = g
+
     return errors
 
 

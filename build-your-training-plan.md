@@ -217,6 +217,7 @@ The rules that matter most (the schema has the full detail):
   - For a `periodRange` session, `rx` can instead be an object with an entry for every period in the range, e.g. `{ "2": "…", "3": "…", "4": "—" }`.
   - `"—"` skips that period.
 - **Every reference must resolve.** Each item option `v`, `circuit`, `t` or `lift` must exist in `videos`, `circuits` or `testDefinitions`. Each `warmupTemplate` and `activationGroup` must exist too. A percentage in `rx` needs `options.lift`.
+- **Supersets/paired exercises:** give two or more items the same `options.group` value (e.g. `"A"`) and place them next to each other in that session's `items` array. The app renders and logs them together as one block instead of one-after-another. Only adjacent items with the same value count as one group — the same value reappearing later, non-adjacently, becomes a second, separate block.
 - **Test kinds:**
   - `load-reps-e1rm` for lifts tested as load × reps, which the app turns into an estimated max
   - `max-load` where the heaviest load wins

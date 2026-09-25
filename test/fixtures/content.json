@@ -1233,7 +1233,8 @@
           },
           "options": {
             "bw": 1,
-            "n": "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps. Superset with DB bench.",
+            "group": "A",
+            "n": "Strict reps first, then 3 slow negatives. Band-assist a set if you miss reps.",
             "desc": "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)."
           }
         },
@@ -1244,7 +1245,9 @@
             "3": "3×8 RPE 7",
             "4": "3×6 RPE 7–8"
           },
-          "options": {}
+          "options": {
+            "group": "A"
+          }
         },
         {
           "name": "Single-arm row",
@@ -1558,7 +1561,8 @@
             "7": "5×4 RPE 8"
           },
           "options": {
-            "n": "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives. Superset with DB bench.",
+            "group": "A",
+            "n": "Bodyweight until you own 5×5; then add load. Finish with 2 slow negatives.",
             "desc": "A negative is the lowering half only: jump or step to chin-over-bar, then lower yourself as slowly as you can (aim for 5 s)."
           }
         },
@@ -1569,7 +1573,9 @@
             "6": "3×6",
             "7": "3×5"
           },
-          "options": {}
+          "options": {
+            "group": "A"
+          }
         },
         {
           "name": "Ring row or single-arm row",
@@ -1849,7 +1855,9 @@
             "10": "4×5 RPE 8",
             "11": "3×5 RPE 8"
           },
-          "options": {}
+          "options": {
+            "group": "A"
+          }
         },
         {
           "name": "DB bench",
@@ -1858,7 +1866,9 @@
             "10": "3×5",
             "11": "2×5"
           },
-          "options": {}
+          "options": {
+            "group": "A"
+          }
         }
       ]
     },

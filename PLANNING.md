@@ -143,6 +143,7 @@ Note: the code block below is annotated with `//` comments for readability in th
 | `TEST_FIELDS` array, duplicated in `app.js` and `functions/_lib/format.js` | `testDefinitions` lives once, in program content; both places read it instead of hardcoding it |
 | `["rfess","bench","row"].includes(it.t)` to decide "heaviest load wins" | explicit `kind: "max-load"` per testDefinition, found during Phase B testing (see companion-files section below) |
 | Every load-field span/result label hardcoded to `"lb"` | `units: "lb" \| "kg"` at content root, read as `app.js`'s `UNIT` constant |
+| "Superset with X" only ever existed as prose in a cue (`n`) field, no structural link between the two exercises | `options.group: "<key>"` on adjacent items — the app renders/logs them as one paired block. Retired the prose cue on the one real pairing already in the program (Pull-up + DB bench, blocks 2-4/5-7/9-11) in favor of the real thing |
 
 ## Security: JSON, not JS — and ingestion sanitization
 

@@ -198,4 +198,18 @@ describe("program.js -> content parity (Phase A2 golden master)", () => {
   it("declares units at the content root", () => {
     expect(content.units).toBe("lb");
   });
+
+  it("carries the group option through for the real Pull-up/DB bench superset pairing", () => {
+    // Real, live pairing added after superset grouping shipped -- confirms
+    // the open options bag passes new option keys through with zero
+    // transform-code changes, exactly as PLANNING.md's design intended.
+    const blockB = content.sessionTemplates.filter((t) => t.key === "B" && t.scope.type === "periodRange");
+    expect(blockB.length).toBeGreaterThan(0);
+    for (const template of blockB) {
+      const pullup = template.items.find((it) => it.name.startsWith("Pull-up"));
+      const bench = template.items.find((it) => it.name === "DB bench");
+      expect(pullup.options.group, template.title).toBe("A");
+      expect(bench.options.group, template.title).toBe("A");
+    }
+  });
 });

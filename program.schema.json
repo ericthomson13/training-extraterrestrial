@@ -186,7 +186,8 @@
                     "v": { "type": "string", "description": "Must reference a videos key." },
                     "n": { "type": "string", "maxLength": 1000, "description": "Short coaching cue, always visible." },
                     "circuit": { "type": "string", "description": "Must reference a circuits key." },
-                    "desc": { "type": "string", "maxLength": 1000, "description": "Long-form clarification for a jargon/abbreviation-prone name, shown on tap-hold/hover." }
+                    "desc": { "type": "string", "maxLength": 1000, "description": "Long-form clarification for a jargon/abbreviation-prone name, shown on tap-hold/hover." },
+                    "group": { "type": "string", "maxLength": 50, "description": "Items sharing the same group value, and adjacent to each other in this session's items array, render and log together as one superset/paired block (e.g. \"A\" on two exercises alternated set-by-set). Non-adjacent items with the same value are treated as two separate groups, not one -- keep paired items next to each other in the array." }
                   },
                   "additionalProperties": true
                 }

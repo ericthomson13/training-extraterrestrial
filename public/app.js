@@ -312,7 +312,9 @@ async function resolveProgram() {
       </section>`;
 
     const wrap = $("#items");
-    s.items.forEach((it, i) => wrap.appendChild(renderItem(s, it, d, i)));
+    groupSessionItems(s.items).forEach(({ items, indices }) => {
+      wrap.appendChild(items.length > 1 ? renderItemGroup(s, items, indices, d) : renderItem(s, items[0], d, indices[0]));
+    });
     updateProgress(s, d);
 
     const warmDone = $("#warmDone");
@@ -349,6 +351,23 @@ async function resolveProgram() {
     nextBtn.onclick = () => scroller.scrollBy({ left: 160, behavior: "smooth" });
     scroller.onscroll = updateNav;
     updateNav();
+  }
+
+  // Groups consecutive items sharing the same options.group value into one
+  // block (a superset/paired exercise); ungrouped items, or a lone item that
+  // happens to carry a group value by itself, render as normal singles.
+  function groupSessionItems(items) {
+    const groups = [];
+    let i = 0;
+    while (i < items.length) {
+      const g = items[i].group;
+      const groupItems = [items[i]], indices = [i];
+      let j = i + 1;
+      if (g) while (j < items.length && items[j].group === g) { groupItems.push(items[j]); indices.push(j); j++; }
+      groups.push({ items: groupItems, indices });
+      i = j;
+    }
+    return groups;
   }
 
   function renderItem(s, it, d, i, open) {
@@ -476,6 +495,160 @@ async function resolveProgram() {
       const next = el.nextElementSibling;
       if (next && next.tagName === "DETAILS") { next.open = true; next.scrollIntoView({ behavior: "smooth", block: "start" }); }
     };
+    return el;
+  }
+
+  // A superset/paired block: one <details> card containing every exercise in
+  // the group, each labeled A1/A2/... Each sub-exercise keeps its own name,
+  // video, description, target, "last time", cue, and set-table -- only the
+  // outer disclosure, done-badge, and "Done -> next" button are shared.
+  function renderItemGroup(s, items, indices, d, open) {
+    const el = document.createElement("details");
+    el.className = "ex ex-group";
+    if (open) el.open = true;
+    const isLast = indices[indices.length - 1] === s.items.length - 1;
+    const groupKey = items[0].group;
+
+    const subHTML = items.map((it, gi) => {
+      const i = indices[gi];
+      const di = d.items[i];
+      const tgt = targetLoad(it);
+      const last = lastFor(it.name, null);
+      const url = it.v && P.videos[it.v];
+      const unit = it.u || "reps";
+      const cls = `set${it.bw ? " nl" : ""}${it.norpe ? " nr" : ""}`;
+      const loadPh = tgt ? String(tgt) : last && last.set.load ? String(last.set.load) : "";
+      const repsPh = it.reps || "";
+      const maxInfo = it.lift && it.pct ? getMax(it.lift) : null;
+      return `
+        <div class="ex-sub" data-i="${i}">
+          <div class="ex-sub-label">${esc(groupKey)}${gi + 1}</div>
+          <div class="ex-top">
+            <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
+            ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
+          </div>
+          ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
+          <div class="rx">${esc(it.rx)}</div>
+          <div class="meta">
+            ${tgt ? `<span class="tag target">Target ${tgt} ${UNIT}</span>` : ""}
+            ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
+            ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " " + UNIT, last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
+          </div>
+          ${it.n ? `<div class="cue">${esc(it.n)}</div>` : ""}
+          ${it.circuit ? `<div class="cue">${esc(P.circuits[it.circuit])}</div>` : ""}
+          <div class="sets">
+            <div class="sets-head ${cls}" aria-hidden="true"><span>Set</span>${it.bw ? "" : "<span>Load</span>"}<span>${esc(unit)}</span>${it.norpe ? "" : "<span>RPE</span>"}</div>
+            ${di.sets.map((st, k) => `
+              <div class="${cls}" data-k="${k}">
+                <button type="button" class="n" aria-pressed="${st.done}" aria-label="Mark set ${k + 1} done">${st.done ? "✓" : k + 1}</button>
+                ${it.bw ? "" : `<div class="field"><input id="l-${s.id}-${i}-${k}" data-f="load" inputmode="decimal" value="${esc(st.load)}" placeholder="${loadPh}" aria-label="Set ${k + 1} load"><span>${UNIT}</span></div>`}
+                <div class="field"><input id="r-${s.id}-${i}-${k}" data-f="reps" inputmode="decimal" value="${esc(st.reps)}" placeholder="${esc(repsPh)}" aria-label="Set ${k + 1} ${esc(unit)}"><span>${esc(it.u || "")}</span></div>
+                ${it.norpe ? "" : `<div class="field"><input id="p-${s.id}-${i}-${k}" data-f="rpe" inputmode="decimal" value="${esc(st.rpe)}" placeholder="RPE" aria-label="Set ${k + 1} RPE"></div>`}
+              </div>`).join("")}
+          </div>
+          <div class="row-actions">
+            <button type="button" class="link-btn" data-act="add" data-i="${i}">+ Set</button>
+            <button type="button" class="link-btn" data-act="note" data-i="${i}">${di.note ? "Edit note" : "+ Note"}</button>
+          </div>
+          <textarea data-f="note" data-i="${i}" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>
+        </div>`;
+    }).join(`<hr class="ex-sub-divider">`);
+
+    el.innerHTML = `
+      <summary>
+        <div class="ex-top">
+          <div class="ex-name">${esc(items.map(it => it.name).join(" + "))}</div>
+          <div class="ex-actions">
+            <span class="ex-done-badge" hidden>✓ Done</span>
+            <span class="tag">Superset</span>
+            <span class="disclosure" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="rx">${esc(items.map(it => it.rx).join(" · "))}</div>
+      </summary>
+      <div class="ex-body">
+        ${subHTML}
+        <button type="button" class="ex-next" data-act="next" aria-label="${isLast ? "Mark done" : "Mark done and go to next exercise"}">✓ Done${isLast ? "" : " — next exercise"}</button>
+      </div>`;
+
+    // Exercise-name clarification, wired per sub-exercise -- identical
+    // hover/long-press/click behavior to a single exercise's info button.
+    el.querySelectorAll(".ex-sub").forEach(sub => {
+      const infoBtn = sub.querySelector(".ex-info");
+      if (!infoBtn) return;
+      const descEl = sub.querySelector(".ex-desc");
+      let longPressTimer = null, longPressFired = false;
+      const showDesc = () => { descEl.hidden = false; infoBtn.setAttribute("aria-expanded", "true"); };
+      const hideDesc = () => { descEl.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); };
+      infoBtn.onclick = e => {
+        e.preventDefault(); e.stopPropagation();
+        if (longPressFired) { longPressFired = false; return; }
+        descEl.hidden ? showDesc() : hideDesc();
+      };
+      infoBtn.onmouseenter = showDesc;
+      infoBtn.onmouseleave = () => { if (document.activeElement !== infoBtn) hideDesc(); };
+      infoBtn.onfocus = showDesc;
+      infoBtn.onblur = hideDesc;
+      infoBtn.ontouchstart = e => {
+        e.stopPropagation();
+        longPressFired = false;
+        longPressTimer = setTimeout(() => { longPressFired = true; showDesc(); }, 450);
+      };
+      infoBtn.ontouchend = e => {
+        e.stopPropagation();
+        clearTimeout(longPressTimer);
+        if (longPressFired) hideDesc();
+      };
+      infoBtn.ontouchcancel = () => { clearTimeout(longPressTimer); longPressFired = false; };
+    });
+
+    // "Done" for the group reflects every sub-exercise being fully done, not
+    // just one -- matches WCAG 1.4.1 the same way a single exercise's badge
+    // does (real text, not a color-only signal).
+    const doneBadge = el.querySelector(".ex-done-badge");
+    const refreshDone = () => {
+      const allDone = indices.every(i => d.items[i].sets.length > 0 && d.items[i].sets.every(x => x.done));
+      el.classList.toggle("done", allDone);
+      doneBadge.hidden = !allDone;
+    };
+    refreshDone();
+
+    items.forEach((it, gi) => {
+      const i = indices[gi];
+      const di = d.items[i];
+      const sub = el.querySelector(`.ex-sub[data-i="${i}"]`);
+      sub.querySelectorAll(".set[data-k]").forEach(row => {
+        const k = +row.dataset.k, st = di.sets[k];
+        row.querySelector(".n").onclick = e => {
+          st.done = !st.done;
+          if (st.done) {
+            row.querySelectorAll("input").forEach(inp => {
+              if (!inp.value && inp.placeholder && /^\d+(\.\d+)?$/.test(inp.placeholder)) { inp.value = inp.placeholder; st[inp.dataset.f] = inp.value; }
+            });
+          }
+          e.currentTarget.setAttribute("aria-pressed", st.done); e.currentTarget.textContent = st.done ? "✓" : k + 1;
+          refreshDone(); updateProgress(s, d); saveDraft(s, d);
+        };
+        row.querySelectorAll("input").forEach(inp => inp.oninput = () => {
+          st[inp.dataset.f] = inp.value; saveDraft(s, d);
+          if (inp.dataset.f !== "reps") sub.querySelectorAll(`.set[data-k] input[data-f="${inp.dataset.f}"]`).forEach(o => { if (+o.closest(".set").dataset.k > k && !o.value) o.placeholder = inp.value; });
+        });
+      });
+      const ta = sub.querySelector("textarea");
+      ta.oninput = () => { di.note = ta.value; saveDraft(s, d); };
+      sub.querySelector('[data-act="note"]').onclick = () => { ta.hidden = false; ta.focus(); };
+      sub.querySelector('[data-act="add"]').onclick = () => {
+        di.sets.push({ done: false, load: "", reps: "", rpe: "" }); store.set(draftKey(s.id), d);
+        el.replaceWith(renderItemGroup(s, items, indices, d, el.open)); updateProgress(s, d);
+      };
+    });
+
+    el.querySelector('[data-act="next"]').onclick = () => {
+      el.open = false;
+      const next = el.nextElementSibling;
+      if (next && next.tagName === "DETAILS") { next.open = true; next.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    };
+
     return el;
   }
 

@@ -130,6 +130,76 @@ async function resolveProgram() {
   }
   const num = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
 
+  /* ---------- progress + PRs ---------- */
+  // A given exercise's PR metric is heaviest load ever logged (any rep count)
+  // for loaded exercises, or highest reps/seconds/distance for bodyweight
+  // ones -- inferred from the data itself (does any set for this name have a
+  // load value?) rather than needing extra metadata on the logged entry.
+  function exerciseUsesLoad(name, entries) {
+    return entries.some(e => (e.items.find(x => x.name === name) || {}).sets?.some(s => num(s.load) != null));
+  }
+  function bestValue(sets, useLoad) {
+    let best = null;
+    sets.forEach(s => { const v = num(useLoad ? s.load : s.reps); if (v != null && (best == null || v > best)) best = v; });
+    return best;
+  }
+  // Full-history time series for one exercise: one point per session where it
+  // was logged, using that session's own best set. Used by both the save-time
+  // PR toast and the Progress tab's chart.
+  function exerciseHistory(name) {
+    const log = getLog();
+    const useLoad = exerciseUsesLoad(name, log);
+    let unit = useLoad ? UNIT : "reps";
+    const points = [];
+    log.forEach(e => {
+      const it = e.items.find(x => x.name === name);
+      if (!it || !it.sets.length) return;
+      const v = bestValue(it.sets, useLoad);
+      if (v != null) { points.push({ date: e.date, value: v }); if (!useLoad && it.u) unit = it.u; }
+    });
+    points.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    return { useLoad, unit, points };
+  }
+  // Compares the just-logged entry's items against every OTHER session's
+  // history (priorLog should be captured before the new entry is added) and
+  // returns the exercises where this entry set a new all-time best. The very
+  // first time an exercise is ever logged is a baseline, not a PR.
+  function detectPRs(entry, priorLog) {
+    const prior = priorLog.filter(e => e.id !== entry.id);
+    const prs = [];
+    entry.items.forEach(it => {
+      if (!it.sets.length) return;
+      const historicalSets = prior.flatMap(e => (e.items.find(x => x.name === it.name) || {}).sets || []);
+      if (!historicalSets.length) return;
+      const useLoad = historicalSets.some(s => num(s.load) != null) || it.sets.some(s => num(s.load) != null);
+      const priorBest = bestValue(historicalSets, useLoad);
+      const newBest = bestValue(it.sets, useLoad);
+      if (priorBest != null && newBest != null && newBest > priorBest) {
+        prs.push({ name: it.name, value: newBest, unit: useLoad ? UNIT : (it.u || "reps") });
+      }
+    });
+    return prs;
+  }
+  // Small hand-built line chart -- no charting library, consistent with the
+  // app's dependency-light approach. A single point renders as a lone dot.
+  function renderSparkline(points, unit) {
+    const W = 280, H = 80, PAD = 10;
+    if (!points.length) return "";
+    const values = points.map(p => p.value);
+    const min = Math.min(...values), max = Math.max(...values);
+    const x = i => points.length === 1 ? W / 2 : PAD + (i / (points.length - 1)) * (W - 2 * PAD);
+    const y = v => H - PAD - (max === min ? 0.5 : (v - min) / (max - min)) * (H - 2 * PAD);
+    const coords = points.map((p, i) => [x(i), y(p.value)]);
+    const line = coords.map(([cx, cy]) => `${cx.toFixed(1)},${cy.toFixed(1)}`).join(" ");
+    const dots = coords.map(([cx, cy]) => `<circle class="spark-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3"></circle>`).join("");
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${points[0].value}${unit} to ${points[points.length - 1].value}${unit} over ${points.length} sessions">
+      ${points.length > 1 ? `<polyline class="spark-line" points="${line}"></polyline>` : ""}
+      ${dots}
+      <text class="spark-label" x="${PAD}" y="${H - 2}">${esc(fmt(parseISO(points[0].date)))}</text>
+      <text class="spark-label" x="${W - PAD}" y="${H - 2}" text-anchor="end">${esc(fmt(parseISO(points[points.length - 1].date)))}</text>
+    </svg>`;
+  }
+
   /* ---------- UI state ---------- */
   let view = "session";
   let selWeek = currentWeek();
@@ -167,9 +237,10 @@ async function resolveProgram() {
   let saveTimer = null;
   function saveDraft(s, d) { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set(draftKey(s.id), d), 250); }
 
-  function toast(msg) {
+  function toast(msg, opts = {}) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
-    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600);
+    t.classList.toggle("pr", !!opts.pr);
+    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.pr ? 4200 : 2600);
   }
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -427,14 +498,21 @@ async function resolveProgram() {
       }))
     };
     if (!entry.items.some(x => x.sets.length) && !entry.notes) { toast("Nothing logged yet: tap a set number to mark it done"); return; }
-    const log = getLog(); log.push(entry);
+    const priorLog = getLog();
+    const prs = detectPRs(entry, priorLog);
+    const log = priorLog.slice(); log.push(entry);
     if (!store.set(LOG, log)) { toast("Couldn't save: this browser is blocking storage"); return; }
     if (window.SYNC) window.SYNC.queueUpsertSession(entry);
     let msg = "Saved to log";
     const rec = testsFromEntry(entry);
     if (rec) { mergeTest(rec); msg = "Saved. Test results recorded"; }
     store.del(draftKey(s.id));
-    toast(msg);
+    if (prs.length) {
+      const list = prs.map(p => `${p.name} ${p.value} ${p.unit}`).join(", ");
+      toast(`Saved — 🎉 New PR: ${list}`, { pr: true });
+    } else {
+      toast(msg);
+    }
     selKey = null; render(); window.scrollTo(0, 0);
   }
 
@@ -510,6 +588,33 @@ async function resolveProgram() {
       if (!Object.keys(v).length) { toast("Enter at least one result"); return; }
       mergeTest({ date, v }); toast("Results saved"); render();
     };
+  }
+
+  function renderProgress() {
+    const log = getLog();
+    $("#phaseLine").textContent = "Progress + PRs";
+    const names = Array.from(new Set(log.flatMap(e => e.items.filter(it => it.sets.length).map(it => it.name)))).sort();
+    const recentCutoff = new Date(); recentCutoff.setDate(recentCutoff.getDate() - 7);
+    const rows = names.map(name => {
+      const { unit, points } = exerciseHistory(name);
+      if (!points.length) return null;
+      const best = points.reduce((a, b) => b.value > a.value ? b : a);
+      const isRecent = parseISO(best.date) >= recentCutoff;
+      return { name, unit, best, isRecent, points };
+    }).filter(Boolean);
+
+    app.innerHTML = `
+      <div class="head"><div class="eyebrow">Best lifts across your whole log</div><h1>Progress</h1></div>
+      ${rows.length ? `<div id="prList"></div>` : `<p class="empty">Nothing logged yet. Personal records show up here once you've saved a few sessions.</p>`}`;
+
+    const box = $("#prList");
+    if (!box) return;
+    rows.forEach(row => {
+      const det = document.createElement("details"); det.className = "entry";
+      det.innerHTML = `<summary><span><b>${esc(row.name)}</b>${row.isRecent ? '<span class="pr-badge">New PR</span>' : ""}</span><span class="d">${esc(String(row.best.value))} ${esc(row.unit)} · ${fmt(parseISO(row.best.date))}</span></summary>
+        <div class="b">${renderSparkline(row.points, row.unit)}</div>`;
+      box.appendChild(det);
+    });
   }
 
   /* ---------- log + export ---------- */
@@ -614,7 +719,7 @@ async function resolveProgram() {
   /* ---------- shell ---------- */
   function render() {
     document.querySelectorAll(".nav button").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
-    if (view === "session") renderSession(); else if (view === "log") renderLog(); else renderTests();
+    if (view === "session") renderSession(); else if (view === "log") renderLog(); else if (view === "tests") renderTests(); else renderProgress();
   }
   document.querySelectorAll(".nav button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); window.scrollTo(0, 0); });
   // a background sync pull merged in data from another device; re-render

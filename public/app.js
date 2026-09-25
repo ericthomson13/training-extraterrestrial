@@ -1,10 +1,51 @@
 /* Ski Strength Log — offline gym logger. Data lives in this browser (localStorage);
-   Export sends it to Claude, who updates program.js and the program doc. */
-(function () {
+   Export sends it to Claude, who updates the program, which now lives in D1
+   (see PLANNING.md) with the static program.js kept only as an offline/
+   emergency-rollback fallback. */
+import { currentPeriod, getSession as engineGetSession, periodEnd, periodPhase, periodStart, sessionKeysFor } from "./programEngine.js";
+import { transformLegacyProgram } from "./legacyProgramAdapter.js";
+
+// Feature flag (PLANNING.md Phase B): which program source to read from.
+// Revertible without a redeploy -- flip via ?src=static / ?src=api in the
+// URL (persists to localStorage), or clear localStorage's ssl:programSource
+// key directly. Defaults to "static" until the API path is verified.
+function resolveProgramSourceFlag() {
+  const qp = new URLSearchParams(location.search).get("src");
+  if (qp === "api" || qp === "static") {
+    try { localStorage.setItem("ssl:programSource", qp); } catch (e) {}
+    return qp;
+  }
+  try { return localStorage.getItem("ssl:programSource") || "static"; } catch (e) { return "static"; }
+}
+
+async function resolveProgram() {
+  if (resolveProgramSourceFlag() === "api") {
+    try {
+      const res = await fetch("/api/programs/current");
+      if (res.ok) {
+        const { program } = await res.json();
+        if (program && program.content) {
+          try { localStorage.setItem("ssl:program:lastGood", JSON.stringify(program.content)); } catch (e) {}
+          return { content: program.content, meta: { source: "api", programId: program.programId, versionNo: program.versionNo } };
+        }
+      }
+    } catch (e) { /* fall through to a cached or static copy below */ }
+    try {
+      const cached = localStorage.getItem("ssl:program:lastGood");
+      if (cached) return { content: JSON.parse(cached), meta: { source: "api-cache" } };
+    } catch (e) { /* fall through to static */ }
+  }
+  return { content: transformLegacyProgram(window.PROGRAM, "Ski Strength"), meta: { source: "static" } };
+}
+
+(async function () {
   "use strict";
-  const P = window.PROGRAM;
+  const { content: P, meta: programMeta } = await resolveProgram();
   const $ = (s, el = document) => el.querySelector(s);
   const app = $("#app");
+  document.title = P.displayName || document.title;
+  const brandEl = $(".brand");
+  if (brandEl && brandEl.firstChild) brandEl.firstChild.textContent = P.displayName || "";
 
   /* ---------- storage ---------- */
   const store = {
@@ -22,51 +63,33 @@
   const parseISO = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const fmt = d => `${MON[d.getMonth()]} ${d.getDate()}`;
-  // Season shape (week count, phase labels, deload weeks, in-season start)
-  // comes entirely from program.js's `season` data — nothing here is tied to
-  // a specific season, so a future season is a new program.js, not app.js edits.
-  const start = parseISO(P.season.start);
-  const weekMeta = w => P.season.weeks.find(x => x.n === w);
-  const weekStart = w => new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7 * (w - 1));
-  function currentWeek() {
-    const days = Math.floor((new Date() - start) / 864e5);
-    if (days < 0) return 1;
-    const w = Math.floor(days / 7) + 1;
-    return w > P.season.weeks.length ? "S" : w;
-  }
-  const PHASE = w => w === "S" ? "In-season" : (weekMeta(w) || {}).phase || "";
+
+  // Program-shape access goes through programEngine.js's generic interpreter
+  // (see PLANNING.md) -- app.js keeps its own "S" sentinel for in-season
+  // internally (draft keys, logged-session ids, and UI comparisons throughout
+  // this file already assume it), translating to/from the engine's "ongoing"
+  // sentinel only at these boundary functions.
+  const toEnginePeriod = w => w === "S" ? "ongoing" : w;
+  const currentWeek = () => { const p = currentPeriod(P, new Date()); return p === "ongoing" ? "S" : p; };
+  const PHASE = w => periodPhase(P, toEnginePeriod(w));
   const weekLabel = w => w === "S" ? "In-season" : `Week ${w}`;
-  const weekDates = w => { if (w === "S") return `From ${fmt(parseISO(P.season.inSeasonStart))}`; const a = weekStart(w), b = weekStart(w); b.setDate(b.getDate() + 6); return `${fmt(a)} – ${fmt(b)}`; };
+  const weekDates = w => {
+    if (w === "S") return `From ${fmt(parseISO(P.ongoingPeriod.startDate))}`;
+    return `${fmt(periodStart(P, w))} – ${fmt(periodEnd(P, w))}`;
+  };
 
   /* ---------- program model ---------- */
-  const WEEKS = P.season.weeks.map(w => w.n).concat("S");
+  const WEEKS = P.periods.map(p => p.n).concat("S");
   function sessionKeys(w) {
-    const s = P.singles.filter(x => x.week === w).map(x => x.key);
-    return s.length ? s : ["A", "B", "C"];
+    return sessionKeysFor(P, toEnginePeriod(w));
   }
-  const KEYNAME = { A: "A · Heavy", B: "B · Single-leg", C: "C · Ski-specific", D1: "Day 1", D2: "Day 2", D3: "Day 3", M1: "M1 Strength", M2: "M2 Endurance", PR: "Primer", MD: "Micro-dose" };
-  function parseRx(rx, o) {
-    const r = { sets: 1, reps: "", pct: o.pct || null };
-    let m;
-    if ((m = rx.match(/^(\d+)\s*×\s*(\d+)/))) { r.sets = +m[1]; r.reps = m[2]; }
-    else if ((m = rx.match(/^(\d+)\s*×/))) r.sets = +m[1];
-    else if ((m = rx.match(/(\d+)\s*rounds?/))) r.sets = +m[1];
-    if ((m = rx.match(/@\s*([\d.]+)%/))) r.pct = +m[1] / 100;
-    return r;
-  }
+  // Legacy id convention (`w${w}-${key}`, `w` can be a number or "S")
+  // preserved exactly -- localStorage draft keys and every already-logged
+  // session's `sessionId` field depend on this exact format.
   function getSession(w, key) {
-    const id = `w${w}-${key}`;
-    const single = P.singles.find(x => x.week === w && x.key === key);
-    let raw, title, type, extra = {};
-    if (single) { raw = single.items.map(([n, rx, o]) => [n, rx, o || {}]); title = single.title; type = single.type; extra = single; }
-    else {
-      const blk = P.blocks.find(b => b.weeks.includes(w));
-      const idx = blk.weeks.indexOf(w), s = blk.sessions[key];
-      raw = s.items.map(([n, rx, o]) => [n, Array.isArray(rx) ? rx[idx] : rx, o || {}]);
-      title = s.title; type = key; extra = s;
-    }
-    const items = raw.filter(([, rx]) => rx && rx !== "—").map(([name, rx, o], i) => Object.assign({ i, name, rx }, o, parseRx(rx, o)));
-    return { id, week: w, key, title, type, items, test: !!extra.test, me: !!extra.me, noWarmup: !!extra.noWarmup };
+    const s = engineGetSession(P, toEnginePeriod(w), key);
+    if (!s) return null;
+    return { ...s, id: `w${w}-${key}`, week: w, key };
   }
 
   /* ---------- maxes + targets ---------- */
@@ -79,7 +102,7 @@
   function getMax(lift) {
     const t = latestTest(lift);
     if (t && t.val && t.val.e1rm) return { v: t.val.e1rm, src: `tested ${t.date}` };
-    if (P.maxes && P.maxes[lift]) return { v: P.maxes[lift], src: "program" };
+    if (P.seedMaxes && P.seedMaxes[lift]) return { v: P.seedMaxes[lift], src: "program" };
     return null;
   }
   function targetLoad(it) {
@@ -109,7 +132,8 @@
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
   function loggedKeysInWeek(w) {
     if (w === "S") return new Set();
-    const s = weekStart(w), end = new Date(s); end.setDate(end.getDate() + 7);
+    const s = periodStart(P, w);
+    const end = periodEnd(P, w); end.setDate(end.getDate() + 1);
     return new Set(getLog().filter(e => { const d = parseISO(e.date); return d >= s && d < end; }).map(e => e.key));
   }
   function defaultKey(w) {
@@ -155,9 +179,8 @@
 
     const logged = loggedIds();
     $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
-    const typeForWarm = s.type === "B" ? "B" : s.type === "C" ? "C" : "A";
-    const erg = typeForWarm === "B" ? "SkiErg" : "Assault bike";
-    const noSpikes = s.me || (weekMeta(selWeek) || {}).deload || s.type === "C";
+    const warmupTpl = s.warmupTemplate ? P.warmupTemplates.find(t => t.key === s.warmupTemplate) : null;
+    const noSpikes = s.noWarmupSpikes;
 
     app.innerHTML = `
       <div class="weeks-row">
@@ -177,26 +200,29 @@
         <button type="button" class="weeks-nav" id="weeksNext" aria-label="Scroll weeks right">›</button>
       </div>
       <div class="sessions" role="group" aria-label="Session">
-        ${sessionKeys(selWeek).map(k => `<button type="button" class="seg" data-key="${k}" aria-pressed="${k === selKey}">${esc(KEYNAME[k] || k)}${logged.has(`w${selWeek}-${k}`) ? '<span class="tick" aria-label="logged">●</span>' : ""}</button>`).join("")}
+        ${sessionKeys(selWeek).map(k => {
+          const label = (getSession(selWeek, k) || {}).shortLabel || k;
+          return `<button type="button" class="seg" data-key="${k}" aria-pressed="${k === selKey}">${esc(label)}${logged.has(`w${selWeek}-${k}`) ? '<span class="tick" aria-label="logged">●</span>' : ""}</button>`;
+        }).join("")}
       </div>
       <div class="head">
         <div class="eyebrow">${esc(weekLabel(selWeek))} · ${esc(weekDates(selWeek))} · ${esc(PHASE(selWeek))}</div>
         <h1>${esc(s.title)}</h1>
         <div class="progress" id="prog"></div>
       </div>
-      ${s.noWarmup ? "" : `
+      ${warmupTpl ? `
       <details class="panel" id="warm" open>
-        <summary><span><h2>Warm-up · ${erg}</h2><span class="progress">7 min erg · mobility · activation · ~14 min</span></span></summary>
+        <summary><span><h2>Warm-up · ${esc(warmupTpl.ergName)}</h2><span class="progress">7 min erg · mobility · activation · ~14 min</span></span></summary>
         <div class="panel-body">
-          <table class="erg"><tbody>${P.warmup.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${r[0]}</td><td>${esc(r[1])}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table>
+          <table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${r[0]}</td><td>${esc(r[1])}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table>
           ${noSpikes ? '<p class="note-muted">Skip the spikes today (ME, deload or ski-specific day).</p>' : ""}
-          ${s.test ? '<p class="note-muted">Test day: add a second block of 3 spikes and one extra ramp set.</p>' : ""}
-          <p class="kv"><b>Mobility · 3 min</b>${esc(P.warmup.mobility)}</p>
-          <p class="kv"><b>Activation · 3–4 min</b>${esc(P.warmup.act[typeForWarm])}</p>
+          ${s.testDayNote ? `<p class="note-muted">${esc(s.testDayNote)}</p>` : ""}
+          <p class="kv"><b>Mobility · 3 min</b>${esc(warmupTpl.mobility)}</p>
+          <p class="kv"><b>Activation · 3–4 min</b>${esc(P.activation[warmupTpl.activationGroup])}</p>
           <p class="kv"><b>Then</b>2–4 ramp sets to the first working weight.</p>
           <button type="button" class="ex-next" id="warmDone">✓ Done — start workout</button>
         </div>
-      </details>`}
+      </details>` : ""}
       <div id="items"></div>
       <section class="finish" aria-label="Finish session">
         <div class="grid2">
@@ -281,7 +307,7 @@
           ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " lb", last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
         </div>
         ${it.n ? `<div class="cue">${esc(it.n)}</div>` : ""}
-        ${it.circuit ? `<div class="cue">${esc(P.meCircuit)}</div>` : ""}
+        ${it.circuit ? `<div class="cue">${esc(P.circuits[it.circuit])}</div>` : ""}
       </summary>
       <div class="ex-body">
         <div class="sets">
@@ -408,14 +434,12 @@
   }
 
   /* ---------- tests ---------- */
-  const TEST_FIELDS = [
-    ["squat", "Back squat", "lb × reps", "lift"], ["deadlift", "Deadlift", "lb × reps", "lift"],
-    ["rfess", "RFESS 8RM", "lb/DB"], ["bench", "DB bench 8RM", "lb/DB"], ["row", "Single-arm row 8RM", "lb"],
-    ["pullup", "Pull-up max", "reps"], ["broad", "Broad jump", "in"], ["hopL", "SL hop L", "in"], ["hopR", "SL hop R", "in"],
-    ["lathops", "Lateral hops", "/30 s"], ["wallsit", "Wall sit 90°", "s"], ["k2wL", "Knee-to-wall L", "cm"], ["k2wR", "Knee-to-wall R", "cm"],
-    ["stanceL", "SL stance L", "s"], ["stanceR", "SL stance R", "s"], ["cphL", "Copenhagen L", "s"], ["cphR", "Copenhagen R", "s"],
-    ["sideL", "Side plank L", "s"], ["sideR", "Side plank R", "s"], ["tib", "Tib raises", "reps"], ["aet", "AeT heart rate", "bpm"], ["bw", "Body weight", "lb"]
-  ];
+  // Sourced from the program's testDefinitions instead of a hardcoded array,
+  // so a future non-ski program can define entirely different tests without
+  // any app.js change. "lift" here is app.js's own local sentinel (matching
+  // the pre-existing load+reps-pair rendering below), translated from the
+  // program-schema's "load-reps-e1rm" kind.
+  const TEST_FIELDS = P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : undefined]);
   function testsFromEntry(e) {
     const v = {};
     e.items.forEach(it => {
@@ -500,7 +524,7 @@
     });
     return lines.join("\n");
   }
-  const exportJSON = () => JSON.stringify({ app: "ski-strength-log", exported: new Date().toISOString(), programVersion: P.version, log: getLog(), tests: getTests() }, null, 1);
+  const exportJSON = () => JSON.stringify({ app: "ski-strength-log", exported: new Date().toISOString(), programVersion: programMeta.versionNo ?? null, log: getLog(), tests: getTests() }, null, 1);
 
   async function copy(text, okMsg) {
     try { await navigator.clipboard.writeText(text); toast(okMsg); }

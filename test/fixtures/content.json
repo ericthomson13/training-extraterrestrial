@@ -241,6 +241,7 @@
   "warmupTemplates": [
     {
       "key": "ergA",
+      "ergName": "Assault bike",
       "erg": [
         [
           "0–3 min",
@@ -268,6 +269,7 @@
     },
     {
       "key": "ergB",
+      "ergName": "SkiErg",
       "erg": [
         [
           "0–3 min",
@@ -295,6 +297,7 @@
     },
     {
       "key": "ergC",
+      "ergName": "Assault bike",
       "erg": [
         [
           "0–3 min",
@@ -325,6 +328,7 @@
     {
       "key": "D1",
       "title": "Normalization",
+      "shortLabel": "Day 1",
       "scope": {
         "type": "period",
         "n": 1
@@ -461,6 +465,7 @@
     {
       "key": "D2",
       "title": "Strength + power test",
+      "shortLabel": "Day 2",
       "scope": {
         "type": "period",
         "n": 1
@@ -544,6 +549,7 @@
     {
       "key": "D3",
       "title": "Single-leg + ski test",
+      "shortLabel": "Day 3",
       "scope": {
         "type": "period",
         "n": 1
@@ -645,6 +651,7 @@
     {
       "key": "D1",
       "title": "Deload",
+      "shortLabel": "Day 1",
       "scope": {
         "type": "period",
         "n": 8
@@ -697,6 +704,7 @@
     {
       "key": "D2",
       "title": "Retest",
+      "shortLabel": "Day 2",
       "scope": {
         "type": "period",
         "n": 8
@@ -787,6 +795,7 @@
     {
       "key": "M1",
       "title": "Maintenance: strength + power",
+      "shortLabel": "M1 Strength",
       "scope": {
         "type": "ongoing"
       },
@@ -854,6 +863,7 @@
     {
       "key": "M2",
       "title": "Maintenance: ME + isometric",
+      "shortLabel": "M2 Endurance",
       "scope": {
         "type": "ongoing"
       },
@@ -895,6 +905,7 @@
     {
       "key": "PR",
       "title": "Primer (3–4 days before an event)",
+      "shortLabel": "Primer",
       "scope": {
         "type": "ongoing"
       },
@@ -930,6 +941,7 @@
     {
       "key": "MD",
       "title": "Micro-dose (10–15 min, home)",
+      "shortLabel": "Micro-dose",
       "scope": {
         "type": "ongoing"
       },
@@ -1002,6 +1014,7 @@
     {
       "key": "A",
       "title": "Squat, hinge, power",
+      "shortLabel": "A · Heavy",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1132,6 +1145,7 @@
     {
       "key": "B",
       "title": "Single-leg, lateral, upper",
+      "shortLabel": "B · Single-leg",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1267,6 +1281,7 @@
     {
       "key": "C",
       "title": "Ski-specific eccentric + isometric",
+      "shortLabel": "C · Ski-specific",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1369,6 +1384,7 @@
     {
       "key": "A",
       "title": "Heavy bilateral + power",
+      "shortLabel": "A · Heavy",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1472,6 +1488,7 @@
     {
       "key": "B",
       "title": "Heavy single-leg + lateral + upper",
+      "shortLabel": "B · Single-leg",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1576,6 +1593,7 @@
     {
       "key": "C",
       "title": "Muscular endurance + isometric",
+      "shortLabel": "C · Ski-specific",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1666,6 +1684,7 @@
     {
       "key": "A",
       "title": "Contrast power",
+      "shortLabel": "A · Heavy",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1757,6 +1776,7 @@
     {
       "key": "B",
       "title": "Lateral reactive + single-leg",
+      "shortLabel": "B · Single-leg",
       "scope": {
         "type": "periodRange",
         "periods": [
@@ -1844,6 +1864,7 @@
     {
       "key": "C",
       "title": "Heavy isometric + eccentric (3-day weeks only)",
+      "shortLabel": "C · Ski-specific",
       "scope": {
         "type": "periodRange",
         "periods": [

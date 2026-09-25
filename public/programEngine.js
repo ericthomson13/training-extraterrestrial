@@ -106,6 +106,7 @@ export function getSession(content, n, key) {
     period: n,
     key,
     title: template.title,
+    shortLabel: template.shortLabel || key,
     items,
     isTest: !!template.isTest,
     noWarmupSpikes: !!template.noWarmupSpikes || deload,

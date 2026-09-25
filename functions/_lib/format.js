@@ -3,9 +3,13 @@
 // import — app.js is a classic (non-module) script, and this is ~40 lines,
 // not worth a build step to share.
 
-const TEST_FIELDS = [
-  ["squat", "Back squat", "lb × reps", "lift"],
-  ["deadlift", "Deadlift", "lb × reps", "lift"],
+// Fallback only -- used when the caller has no program content to read
+// testDefinitions from (e.g. a brand-new user with no program yet). Once a
+// program exists, its own testDefinitions are what's actually used, so a
+// non-ski program's test fields are labeled correctly without any code change.
+const DEFAULT_TEST_FIELDS = [
+  ["squat", "Back squat", "lb × reps"],
+  ["deadlift", "Deadlift", "lb × reps"],
   ["rfess", "RFESS 8RM", "lb/DB"],
   ["bench", "DB bench 8RM", "lb/DB"],
   ["row", "Single-arm row 8RM", "lb"],
@@ -26,7 +30,7 @@ const TEST_FIELDS = [
   ["tib", "Tib raises", "reps"],
   ["aet", "AeT heart rate", "bpm"],
   ["bw", "Body weight", "lb"],
-];
+].map(([key, label, unit]) => ({ key, label, unit }));
 
 function showVal(v) {
   if (v == null) return "";
@@ -45,7 +49,7 @@ function getMax(tests, lift) {
   return null;
 }
 
-export function formatExportText(sessions, tests) {
+export function formatExportText(sessions, tests, testDefinitions = DEFAULT_TEST_FIELDS) {
   const today = new Date().toISOString().slice(0, 10);
   const lines = [`SKI STRENGTH LOG — exported ${today}`];
   const sq = getMax(tests, "squat"),
@@ -58,9 +62,9 @@ export function formatExportText(sessions, tests) {
       .slice()
       .sort((a, b) => (a.date < b.date ? -1 : 1))
       .forEach((t) => {
-        const parts = TEST_FIELDS.filter((f) => t.v[f[0]] != null).map(
-          (f) => `${f[1]} ${showVal(t.v[f[0]])}${typeof t.v[f[0]] === "object" ? "" : " " + f[2]}`,
-        );
+        const parts = testDefinitions
+          .filter((f) => t.v[f.key] != null)
+          .map((f) => `${f.label} ${showVal(t.v[f.key])}${typeof t.v[f.key] === "object" ? "" : " " + f.unit}`);
         lines.push(`${t.date}: ${parts.join("; ")}`);
       });
   }

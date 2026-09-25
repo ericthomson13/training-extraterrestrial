@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { deleteSession, listSessions, listTests, upsertSession, upsertTest } from "../functions/_lib/db.js";
+import { deleteSession, getCurrentProgram, listSessions, listTests, upsertSession, upsertTest } from "../functions/_lib/db.js";
 
 const EMAIL = "eric@example.com";
 
@@ -91,5 +91,66 @@ describe("test_result merge-upserts", () => {
     await upsertTest(env.DB, EMAIL, date, { bw: 199 });
     const otherUsersTests = await listTests(env.DB, "someone-else@example.com");
     expect(otherUsersTests.find((t) => t.date === date)).toBeUndefined();
+  });
+});
+
+describe("getCurrentProgram", () => {
+  it("returns null for a user with no programs (the normal new-user state, not an error)", async () => {
+    const result = await getCurrentProgram(env.DB, "brand-new-user@example.com");
+    expect(result).toBeNull();
+  });
+
+  it("returns the current program's latest version content", async () => {
+    const email = "program-user@example.com";
+    await env.DB.prepare(`INSERT INTO app_user (email) VALUES (?)`).bind(email).run();
+    await env.DB
+      .prepare(`INSERT INTO program (id, user_email, name, status, start_date) VALUES ('prog-1', ?, 'Test Program', 'current', '2026-01-01')`)
+      .bind(email)
+      .run();
+    await env.DB
+      .prepare(`INSERT INTO program_version (id, program_id, version_no, content) VALUES ('v1', 'prog-1', 1, ?)`)
+      .bind(JSON.stringify({ displayName: "V1" }))
+      .run();
+    await env.DB
+      .prepare(`INSERT INTO program_version (id, program_id, version_no, content) VALUES ('v2', 'prog-1', 2, ?)`)
+      .bind(JSON.stringify({ displayName: "V2" }))
+      .run();
+
+    const result = await getCurrentProgram(env.DB, email);
+    expect(result.programId).toBe("prog-1");
+    expect(result.versionNo).toBe(2);
+    expect(result.content.displayName).toBe("V2");
+  });
+
+  it("only returns a program with status='current', never a draft or archived one", async () => {
+    const email = "draft-only-user@example.com";
+    await env.DB.prepare(`INSERT INTO app_user (email) VALUES (?)`).bind(email).run();
+    await env.DB
+      .prepare(`INSERT INTO program (id, user_email, name, status) VALUES ('prog-draft', ?, 'Draft Program', 'draft')`)
+      .bind(email)
+      .run();
+    await env.DB
+      .prepare(`INSERT INTO program_version (id, program_id, version_no, content) VALUES ('v-draft', 'prog-draft', 1, ?)`)
+      .bind(JSON.stringify({ displayName: "Draft" }))
+      .run();
+
+    const result = await getCurrentProgram(env.DB, email);
+    expect(result).toBeNull();
+  });
+
+  it("scopes programs by user_email", async () => {
+    const owner = "program-owner@example.com";
+    await env.DB.prepare(`INSERT INTO app_user (email) VALUES (?)`).bind(owner).run();
+    await env.DB
+      .prepare(`INSERT INTO program (id, user_email, name, status) VALUES ('prog-owner', ?, 'Owner Program', 'current')`)
+      .bind(owner)
+      .run();
+    await env.DB
+      .prepare(`INSERT INTO program_version (id, program_id, version_no, content) VALUES ('v-owner', 'prog-owner', 1, ?)`)
+      .bind(JSON.stringify({ displayName: "Owner's" }))
+      .run();
+
+    const result = await getCurrentProgram(env.DB, "someone-else@example.com");
+    expect(result).toBeNull();
   });
 });

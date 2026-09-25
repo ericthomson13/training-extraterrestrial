@@ -63,3 +63,26 @@ export async function listTests(db, userEmail) {
     .all();
   return results.map((r) => ({ date: r.date, v: JSON.parse(r.values_json), updatedAt: r.updated_at }));
 }
+
+// The current program's latest version -- "latest" is automatic (no separate
+// "activate a version" step exists, only "activate a program"), so this is
+// always just the highest version_no for whichever program is status='current'.
+export async function getCurrentProgram(db, userEmail) {
+  const row = await db
+    .prepare(
+      `SELECT p.id as program_id, p.name as program_name, pv.id as version_id, pv.version_no, pv.content
+       FROM program p JOIN program_version pv ON pv.program_id = p.id
+       WHERE p.user_email = ? AND p.status = 'current'
+       ORDER BY pv.version_no DESC LIMIT 1`,
+    )
+    .bind(userEmail)
+    .first();
+  if (!row) return null;
+  return {
+    programId: row.program_id,
+    programName: row.program_name,
+    versionId: row.version_id,
+    versionNo: row.version_no,
+    content: JSON.parse(row.content),
+  };
+}

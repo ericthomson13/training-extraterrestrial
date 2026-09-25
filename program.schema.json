@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://training.extraterrestrial.dev/program.schema.json",
+  "title": "Training program",
+  "description": "The interchange format for a training program uploaded to the Training app. See build-your-training-plan.md and PLANNING.md for the full authoring guide and design rationale. Strict JSON only -- no comments, no trailing commas, no functions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["startDate", "units", "periods", "testDefinitions", "videos", "circuits", "activation", "warmupTemplates", "sessionTemplates"],
+  "properties": {
+    "displayName": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Short name shown in the app's header, e.g. \"Ski Strength\". Optional -- the app falls back to the program's own name/sport if omitted."
+    },
+    "units": {
+      "type": "string",
+      "enum": ["lb", "kg"],
+      "description": "Every load value, target, and load-unit label in the app is shown in this unit. Pick one for the whole program."
+    },
+    "startDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "ISO date. Period 1 starts here; every other period's dates are computed by summing lengthDays."
+    },
+    "periods": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Numbered 1..N with no gaps. A period is whatever block of time makes sense for this program -- a week, a fortnight, anything with a phase and a length.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["n", "phase", "lengthDays"],
+        "properties": {
+          "n": { "type": "integer", "minimum": 1 },
+          "phase": { "type": "string", "maxLength": 200 },
+          "lengthDays": { "type": "integer", "minimum": 1 },
+          "deload": { "type": "boolean", "description": "Marks this whole period as a deload/easy period -- ORs into noWarmupSpikes for every session in it." }
+        }
+      }
+    },
+    "ongoingPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The open-ended phase after the last numbered period (e.g. an in-season maintenance block with no fixed end date). Omit if the program simply ends after its last period.",
+      "required": ["phase", "startDate"],
+      "properties": {
+        "phase": { "type": "string", "maxLength": 200 },
+        "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "seedMaxes": {
+      "type": "object",
+      "description": "Starting e1RM (or other tracked max) per testDefinition key, used until a real logged test overrides it. Keys must exist in testDefinitions.",
+      "additionalProperties": { "type": "number" }
+    },
+    "testDefinitions": {
+      "type": "array",
+      "description": "Every test/max the program tracks. An item's `t` option must reference one of these keys.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "unit", "kind"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+          "label": { "type": "string", "maxLength": 200 },
+          "unit": { "type": "string", "maxLength": 20 },
+          "kind": {
+            "type": "string",
+            "enum": ["load-reps-e1rm", "max-load", "max-value"],
+            "description": "load-reps-e1rm: logged as load x reps, the app computes an estimated 1RM (Epley). max-load: the heaviest logged load wins. max-value: the highest logged number wins (reps, seconds, distance)."
+          }
+        }
+      }
+    },
+    "videos": {
+      "type": "object",
+      "description": "key -> URL. An item's `v` option references a key here. Only use real, checked links -- never invent a URL.",
+      "additionalProperties": { "type": "string", "format": "uri", "maxLength": 2000 }
+    },
+    "circuits": {
+      "type": "object",
+      "description": "key -> freeform description of a circuit/complex. An item's `circuit` option references a key here.",
+      "additionalProperties": { "type": "string", "maxLength": 2000 }
+    },
+    "activation": {
+      "type": "object",
+      "description": "key -> freeform warm-up activation text. A warmupTemplate's activationGroup references a key here.",
+      "additionalProperties": { "type": "string", "maxLength": 2000 }
+    },
+    "warmupTemplates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "ergName", "erg", "mobility", "activationGroup"],
+        "properties": {
+          "key": { "type": "string" },
+          "ergName": { "type": "string", "maxLength": 100, "description": "Display name for the warm-up modality, e.g. \"Assault bike\", \"Row erg\", \"Jog\"." },
+          "erg": {
+            "type": "array",
+            "description": "Ramp table rows: [time label, description, effort label].",
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": { "type": "string" }
+            }
+          },
+          "mobility": { "type": "string", "maxLength": 1000 },
+          "activationGroup": { "type": "string", "description": "Must exist as a key in `activation`." }
+        }
+      }
+    },
+    "sessionTemplates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "title", "scope", "items"],
+        "properties": {
+          "key": { "type": "string", "maxLength": 50, "description": "Short code shown in the day picker, e.g. \"A\", \"D1\", \"Run\". Any string works." },
+          "title": { "type": "string", "maxLength": 200 },
+          "shortLabel": { "type": "string", "maxLength": 50, "description": "Optional friendlier picker label, e.g. \"A · Heavy\". Falls back to `key` if omitted." },
+          "scope": {
+            "type": "object",
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "required": ["type", "n"],
+                "properties": { "type": { "const": "period" }, "n": { "type": "integer", "minimum": 1 } }
+              },
+              {
+                "additionalProperties": false,
+                "required": ["type", "periods"],
+                "properties": {
+                  "type": { "const": "periodRange" },
+                  "periods": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 1 } }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "required": ["type"],
+                "properties": { "type": { "const": "ongoing" } }
+              }
+            ]
+          },
+          "warmupTemplate": { "type": ["string", "null"], "description": "Key into warmupTemplates, or null/omitted to skip the warm-up section entirely for this session." },
+          "noWarmupSpikes": { "type": "boolean", "description": "Skip the warm-up's hard effort spikes for this session type (e.g. a muscular-endurance or deload day)." },
+          "testDayNote": { "type": ["string", "null"], "maxLength": 500 },
+          "isTest": { "type": "boolean" },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "rx"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "Keep this exact string identical across periods and future updates -- the app matches logged history by name."
+                },
+                "rx": {
+                  "description": "A fixed string (\"3×8 RPE 7\"), or for a periodRange session, an object keyed by period number with one entry per period in range (\"—\" or an absent key skips that period).",
+                  "oneOf": [
+                    { "type": "string", "pattern": "×", "maxLength": 200 },
+                    {
+                      "type": "object",
+                      "propertyNames": { "pattern": "^[0-9]+$" },
+                      "additionalProperties": { "type": "string", "maxLength": 200 }
+                    }
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "description": "Open bag -- known keys are typed below, but additional properties are always allowed so a new program can introduce new concepts without a schema change.",
+                  "properties": {
+                    "bw": { "type": "integer", "enum": [1], "description": "Bodyweight -- hides the load field." },
+                    "u": { "type": "string", "maxLength": 20, "description": "Unit label for the reps field (e.g. \"s\", \"in\", \"rounds\"). Omit for plain reps." },
+                    "norpe": { "type": "integer", "enum": [1], "description": "Hide the RPE field." },
+                    "lift": { "type": "string", "description": "Must reference a testDefinitions key. Required if `pct` is set." },
+                    "pct": { "type": "number", "exclusiveMinimum": 0, "maximum": 3, "description": "Target load = pct x current max of `lift`, rounded to a plate-friendly increment." },
+                    "t": { "type": "string", "description": "Marks this item as a test; must reference a testDefinitions key." },
+                    "v": { "type": "string", "description": "Must reference a videos key." },
+                    "n": { "type": "string", "maxLength": 1000, "description": "Short coaching cue, always visible." },
+                    "circuit": { "type": "string", "description": "Must reference a circuits key." },
+                    "desc": { "type": "string", "maxLength": 1000, "description": "Long-form clarification for a jargon/abbreviation-prone name, shown on tap-hold/hover." }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

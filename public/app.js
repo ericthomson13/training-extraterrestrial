@@ -46,6 +46,11 @@ async function resolveProgram() {
   document.title = P.displayName || document.title;
   const brandEl = $(".brand");
   if (brandEl && brandEl.firstChild) brandEl.firstChild.textContent = P.displayName || "";
+  const UNIT = P.units || "lb";
+  // Plate/increment granularity for %-of-max target rounding depends on the
+  // unit -- nearest-5kg is a huge jump (11 lb), nearest-2.5kg is the sane
+  // equivalent of the old fixed nearest-5lb rounding.
+  const ROUND_TO = UNIT === "kg" ? 2.5 : 5;
 
   /* ---------- storage ---------- */
   const store = {
@@ -94,7 +99,7 @@ async function resolveProgram() {
 
   /* ---------- maxes + targets ---------- */
   const e1rm = (load, reps) => Math.round(load * (1 + reps / 30));
-  const r5 = x => Math.round(x / 5) * 5;
+  const r5 = x => Math.round(x / ROUND_TO) * ROUND_TO;
   function latestTest(key) {
     const t = getTests().filter(r => r.v && r.v[key] != null).sort((a, b) => a.date < b.date ? 1 : -1)[0];
     return t ? { date: t.date, val: t.v[key] } : null;
@@ -226,7 +231,7 @@ async function resolveProgram() {
       <div id="items"></div>
       <section class="finish" aria-label="Finish session">
         <div class="grid2">
-          <div><label class="lab" for="bw">Body weight</label><div class="field"><input id="bw" inputmode="decimal" value="${esc(d.bw)}" placeholder="210"><span>lb</span></div></div>
+          <div><label class="lab" for="bw">Body weight</label><div class="field"><input id="bw" inputmode="decimal" value="${esc(d.bw)}" placeholder="210"><span>${UNIT}</span></div></div>
           <div><label class="lab">Soreness today</label><div class="soreness" id="sore">${[0, 1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-pressed="${d.sore === n}">${n}</button>`).join("")}</div></div>
         </div>
         <label class="lab" for="snotes" style="margin-top:12px">Session notes</label>
@@ -302,9 +307,9 @@ async function resolveProgram() {
         ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
         <div class="rx">${esc(it.rx)}</div>
         <div class="meta">
-          ${tgt ? `<span class="tag target">Target ${tgt} lb</span>` : ""}
+          ${tgt ? `<span class="tag target">Target ${tgt} ${UNIT}</span>` : ""}
           ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
-          ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " lb", last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
+          ${last ? `<span class="tag">Last: ${esc([last.set.load && last.set.load + " " + UNIT, last.set.reps && last.set.reps + (it.u ? " " + it.u : ""), last.set.rpe && "@" + last.set.rpe].filter(Boolean).join(" × "))} · ${fmt(parseISO(last.date))}</span>` : ""}
         </div>
         ${it.n ? `<div class="cue">${esc(it.n)}</div>` : ""}
         ${it.circuit ? `<div class="cue">${esc(P.circuits[it.circuit])}</div>` : ""}
@@ -315,7 +320,7 @@ async function resolveProgram() {
           ${di.sets.map((st, k) => `
             <div class="${cls}" data-k="${k}">
               <button type="button" class="n" aria-pressed="${st.done}" aria-label="Mark set ${k + 1} done">${st.done ? "✓" : k + 1}</button>
-              ${it.bw ? "" : `<div class="field"><input id="l-${s.id}-${i}-${k}" data-f="load" inputmode="decimal" value="${esc(st.load)}" placeholder="${loadPh}" aria-label="Set ${k + 1} load"><span>lb</span></div>`}
+              ${it.bw ? "" : `<div class="field"><input id="l-${s.id}-${i}-${k}" data-f="load" inputmode="decimal" value="${esc(st.load)}" placeholder="${loadPh}" aria-label="Set ${k + 1} load"><span>${UNIT}</span></div>`}
               <div class="field"><input id="r-${s.id}-${i}-${k}" data-f="reps" inputmode="decimal" value="${esc(st.reps)}" placeholder="${esc(repsPh)}" aria-label="Set ${k + 1} ${esc(unit)}"><span>${esc(it.u || "")}</span></div>
               ${it.norpe ? "" : `<div class="field"><input id="p-${s.id}-${i}-${k}" data-f="rpe" inputmode="decimal" value="${esc(st.rpe)}" placeholder="RPE" aria-label="Set ${k + 1} RPE"></div>`}
             </div>`).join("")}
@@ -439,16 +444,21 @@ async function resolveProgram() {
   // any app.js change. "lift" here is app.js's own local sentinel (matching
   // the pre-existing load+reps-pair rendering below), translated from the
   // program-schema's "load-reps-e1rm" kind.
-  const TEST_FIELDS = P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : undefined]);
+  // "lift"/"max-load"/"max-value" are app.js's own local sentinels (kept for
+  // the pre-existing load+reps-pair rendering below), translated from the
+  // program schema's own kind vocabulary: load-reps-e1rm / max-load / max-value.
+  const TEST_FIELDS = P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : t.kind]);
+  const kindForTest = key => (TEST_FIELDS.find(f => f[0] === key) || [])[3];
   function testsFromEntry(e) {
     const v = {};
     e.items.forEach(it => {
       if (!it.t || !it.sets.length) return;
-      if (it.t === "squat" || it.t === "deadlift") {
+      const kind = kindForTest(it.t);
+      if (kind === "lift") {
         let best = null;
         it.sets.forEach(x => { const l = num(x.load), r = num(x.reps); if (l && r) { const e1 = e1rm(l, r); if (!best || e1 > best.e1rm) best = { load: l, reps: r, e1rm: e1 }; } });
         if (best) v[it.t] = best;
-      } else if (["rfess", "bench", "row"].includes(it.t)) {
+      } else if (kind === "max-load") {
         const m = Math.max(...it.sets.map(x => num(x.load) || 0)); if (m) v[it.t] = m;
       } else {
         const m = Math.max(...it.sets.map(x => num(x.reps) || 0)); if (m) v[it.t] = m;
@@ -473,8 +483,8 @@ async function resolveProgram() {
     app.innerHTML = `
       <div class="head"><div class="eyebrow">Estimated 1RM drives every % target</div><h1>Tests + maxes</h1></div>
       <div class="maxes">
-        <div class="stat"><b>Squat e1RM</b><span>${sq ? sq.v + " lb" : "—"}</span><em>${sq ? esc(sq.src) : "Test in Week 1, Day 2"}</em></div>
-        <div class="stat"><b>Deadlift e1RM</b><span>${dl ? dl.v + " lb" : "—"}</span><em>${dl ? esc(dl.src) : "Test in Week 1, Day 2"}</em></div>
+        <div class="stat"><b>Squat e1RM</b><span>${sq ? sq.v + " " + UNIT : "—"}</span><em>${sq ? esc(sq.src) : "Test in Week 1, Day 2"}</em></div>
+        <div class="stat"><b>Deadlift e1RM</b><span>${dl ? dl.v + " " + UNIT : "—"}</span><em>${dl ? esc(dl.src) : "Test in Week 1, Day 2"}</em></div>
       </div>
       ${tests.length ? `<div class="tbl-wrap"><table class="tests"><thead><tr><th scope="col">Test</th>${tests.map(t => `<th scope="col">${fmt(parseISO(t.date))}</th>`).join("")}</tr></thead><tbody>
         ${TEST_FIELDS.filter(f => tests.some(t => t.v[f[0]] != null)).map(f => `<tr><th scope="row">${esc(f[1])} <span class="progress">${esc(f[2])}</span></th>${tests.map(t => `<td class="num">${esc(showVal(t.v[f[0]]))}</td>`).join("")}</tr>`).join("")}
@@ -485,7 +495,7 @@ async function resolveProgram() {
           <div class="test-form">
             <div class="full"><label class="lab" for="tdate">Date</label><div class="field"><input id="tdate" type="date" value="${iso(new Date())}"></div></div>
             ${TEST_FIELDS.map(([k, label, unit, kind]) => kind === "lift"
-              ? `<div class="full"><label class="lab">${esc(label)} (rep max)</label><div class="grid2"><div class="field"><input id="t-${k}-l" inputmode="decimal" placeholder="load"><span>lb</span></div><div class="field"><input id="t-${k}-r" inputmode="decimal" placeholder="reps"><span>reps</span></div></div></div>`
+              ? `<div class="full"><label class="lab">${esc(label)} (rep max)</label><div class="grid2"><div class="field"><input id="t-${k}-l" inputmode="decimal" placeholder="load"><span>${UNIT}</span></div><div class="field"><input id="t-${k}-r" inputmode="decimal" placeholder="reps"><span>reps</span></div></div></div>`
               : `<div><label class="lab" for="t-${k}">${esc(label)}</label><div class="field"><input id="t-${k}" inputmode="decimal"><span>${esc(unit)}</span></div></div>`).join("")}
           </div>
           <button type="button" class="primary" id="tSave">Save results</button>
@@ -507,7 +517,7 @@ async function resolveProgram() {
     const log = getLog(), tests = getTests();
     const lines = [`SKI STRENGTH LOG — exported ${iso(new Date())}`];
     const sq = getMax("squat"), dl = getMax("deadlift");
-    lines.push(`Current e1RM: squat ${sq ? sq.v : "—"} lb · deadlift ${dl ? dl.v : "—"} lb`);
+    lines.push(`Current e1RM: squat ${sq ? sq.v : "—"} ${UNIT} · deadlift ${dl ? dl.v : "—"} ${UNIT}`);
     if (tests.length) {
       lines.push("", "TESTS");
       tests.slice().sort((a, b) => a.date < b.date ? -1 : 1).forEach(t => lines.push(`${t.date}: ` + TEST_FIELDS.filter(f => t.v[f[0]] != null).map(f => `${f[1]} ${showVal(t.v[f[0]])}${typeof t.v[f[0]] === "object" ? "" : " " + f[2]}`).join("; ")));

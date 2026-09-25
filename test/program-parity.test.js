@@ -179,4 +179,23 @@ describe("program.js -> content parity (Phase A2 golden master)", () => {
       }
     }
   });
+
+  it("gives each testDefinition the correct kind: e1RM lifts, max-load tests, and max-value tests are distinct", () => {
+    const byKey = Object.fromEntries(content.testDefinitions.map((t) => [t.key, t.kind]));
+    // These three used to be dispatched by hardcoded key-name checks in
+    // app.js (`it.t === "squat" || "deadlift"`, then a bare
+    // `["rfess","bench","row"].includes(it.t)` list) -- a ski-specific
+    // coupling. Now it's real data, and app.js dispatches on `kind` alone.
+    expect(byKey.squat).toBe("load-reps-e1rm");
+    expect(byKey.deadlift).toBe("load-reps-e1rm");
+    expect(byKey.rfess).toBe("max-load");
+    expect(byKey.bench).toBe("max-load");
+    expect(byKey.row).toBe("max-load");
+    expect(byKey.pullup).toBe("max-value");
+    expect(byKey.tib).toBe("max-value");
+  });
+
+  it("declares units at the content root", () => {
+    expect(content.units).toBe("lb");
+  });
 });

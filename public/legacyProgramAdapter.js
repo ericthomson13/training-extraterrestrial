@@ -15,9 +15,9 @@ export function transformLegacyProgram(P, displayName) {
   const testDefinitions = [
     ["squat", "Back squat", "lb × reps", "load-reps-e1rm"],
     ["deadlift", "Deadlift", "lb × reps", "load-reps-e1rm"],
-    ["rfess", "RFESS 8RM", "lb/DB", "max-value"],
-    ["bench", "DB bench 8RM", "lb/DB", "max-value"],
-    ["row", "Single-arm row 8RM", "lb", "max-value"],
+    ["rfess", "RFESS 8RM", "lb/DB", "max-load"],
+    ["bench", "DB bench 8RM", "lb/DB", "max-load"],
+    ["row", "Single-arm row 8RM", "lb", "max-load"],
     ["pullup", "Pull-up max", "reps", "max-value"],
     ["broad", "Broad jump", "in", "max-value"],
     ["hopL", "SL hop L", "in", "max-value"],
@@ -108,6 +108,7 @@ export function transformLegacyProgram(P, displayName) {
 
   return {
     displayName,
+    units: "lb",
     startDate: P.season.start,
     periods,
     ongoingPeriod: { phase: "In-season", startDate: P.season.inSeasonStart },

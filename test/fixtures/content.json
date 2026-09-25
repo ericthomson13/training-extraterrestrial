@@ -1,5 +1,6 @@
 {
   "displayName": "Ski Strength",
+  "units": "lb",
   "startDate": "2026-09-28",
   "periods": [
     {
@@ -94,19 +95,19 @@
       "key": "rfess",
       "label": "RFESS 8RM",
       "unit": "lb/DB",
-      "kind": "max-value"
+      "kind": "max-load"
     },
     {
       "key": "bench",
       "label": "DB bench 8RM",
       "unit": "lb/DB",
-      "kind": "max-value"
+      "kind": "max-load"
     },
     {
       "key": "row",
       "label": "Single-arm row 8RM",
       "unit": "lb",
-      "kind": "max-value"
+      "kind": "max-load"
     },
     {
       "key": "pullup",

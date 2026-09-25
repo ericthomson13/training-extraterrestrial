@@ -60,6 +60,9 @@ Note: the code block below is annotated with `//` comments for readability in th
 {
   displayName: "Ski Strength",          // NEW — the top-left brand text. Per-program, not per-user: switching
                                          // which program is active naturally changes what the header shows.
+  units: "lb",                          // ADDED during Phase B — "lb" | "kg". Every load span/label in app.js was
+                                         // hardcoded to "lb" text; that's now read from here (UNIT constant), and
+                                         // %-of-max rounding uses a unit-appropriate increment (2.5kg vs 5lb).
   startDate: "2026-09-28",              // REQUIRED — season anchor date. Missing from the first draft; app.js's
                                          // currentWeek()/weekStart() are entirely derived from this and there was
                                          // nowhere for it to live in the naive shape.
@@ -70,7 +73,14 @@ Note: the code block below is annotated with `//` comments for readability in th
 
   seedMaxes: { [testKey]: value },      // was maxes:{squat,deadlift}, now arbitrary keys
   testDefinitions: [                    // REPLACES the hardcoded TEST_FIELDS array duplicated in app.js AND
-    { key, label, unit, kind }          // functions/_lib/format.js today. kind e.g. "load-reps-e1rm" | "max-value".
+    { key, label, unit, kind }          // functions/_lib/format.js today. kind: "load-reps-e1rm" | "max-load" |
+                                         // "max-value" — ALL THREE are load-bearing, not just "lift" vs. everything
+                                         // else. app.js originally hardcoded a ski-specific array
+                                         // (`["rfess","bench","row"].includes(it.t)`) to distinguish "heaviest load
+                                         // wins" (max-load) from "highest number wins" (max-value, e.g. reps/seconds/
+                                         // distance) — found and fixed during Phase B testing once a real
+                                         // program-authoring spec (build-your-training-plan.md) called out the same
+                                         // three-way distinction independently.
   ],
 
   videos: { [key]: url },               // unchanged shape
@@ -131,6 +141,8 @@ Note: the code block below is annotated with `//` comments for readability in th
 | `warmup.act.A/B/C` — exactly three hardcoded letters | `activation: {groupKey: description}`, referenced by each warm-up template's own `activationGroup` |
 | `"Test day: add a second block of 3 spikes..."` literal string in `app.js` | `testDayNote` field on the session template |
 | `TEST_FIELDS` array, duplicated in `app.js` and `functions/_lib/format.js` | `testDefinitions` lives once, in program content; both places read it instead of hardcoding it |
+| `["rfess","bench","row"].includes(it.t)` to decide "heaviest load wins" | explicit `kind: "max-load"` per testDefinition, found during Phase B testing (see companion-files section below) |
+| Every load-field span/result label hardcoded to `"lb"` | `units: "lb" \| "kg"` at content root, read as `app.js`'s `UNIT` constant |
 
 ## Security: JSON, not JS — and ingestion sanitization
 
@@ -162,8 +174,18 @@ The generic-schema interpretation logic (cumulative period walk for `currentWeek
 
 A fourth bottom-nav tab, always present (Session / Log / Tests / Getting Started) for every user, not just first-run — added at Eric's request while approving this plan. It's the general program-management surface, not a one-time onboarding screen:
 
-- **No current program**: shows onboarding content plus a starter-prompt document (Eric will supply a `.md` file, analogous to `PROGRAM_FORMAT.md`, aimed at a user with no personal coach — something they can copy and hand to Claude to design their first program from scratch) and the upload flow to submit the result.
+- **No current program**: shows onboarding content and a link to `build-your-training-plan.md` — the starter-prompt document Eric wrote, now in the repo — with copy along the lines of *"Don't have a coach or an existing plan? Use this guide to build one with an AI assistant."* Plus the upload flow to submit the result once they have a file.
 - **Has a current program**: shows the program list (name, sport, status, start date — from `GET /api/programs`), which one is active, and the same upload/switch/activate flow from here — this is where Phase D's ingestion UI lives, rather than a separate settings screen invented for it.
+
+### The program interchange format is now specified twice — reconcile before Phase D
+
+`build-your-training-plan.md` (Eric's doc) ships with its own precise appendix describing the program file format, and references two companion files that now also exist in the repo: **`program.schema.json`** (a full JSON Schema for the shape below, written to match `programEngine.js` exactly) and **`example-program.json`** (a complete valid example exercising every schema feature). **`validate_program.py`** implements both the schema check (using `jsonschema` if installed, a minimal structural check if not) and the cross-reference integrity checks a schema alone can't express — every `v`/`circuit`/`t`/`lift`/`activationGroup`/`warmupTemplate` reference actually resolves, period numbers have no gaps, a `periodRange` session's `rx` only covers periods in its own scope, a `pct` target has a `lift`.
+
+This is the same content shape as the `program_version.content` design above, cross-checked and found to demand two real fixes (both applied):
+- **`units: "lb" | "kg"`** at the content root — missing from the original draft. `app.js` had "lb" hardcoded in every load-field span and result label; now reads `P.units`, and %-of-max rounding uses a unit-appropriate increment (2.5kg vs. 5lb) instead of a fixed nearest-5.
+- **Three-way `kind`**, not two: `load-reps-e1rm` | `max-load` | `max-value`. The original draft only distinguished `"lift"` from everything else; `app.js` was still hardcoding `["rfess","bench","row"].includes(it.t)` to know "heaviest load wins" vs. "highest number wins" — a leftover ski-specific coupling the schema audit above didn't originally catch. `testsFromEntry()` now dispatches on the real `kind` instead.
+
+When Phase D's actual validator ships, `program.schema.json`/`validate_program.py` are the reference implementation to build it from — don't design a second, different validator from scratch.
 
 Because this needs `GET /api/programs`/`GET /api/programs/current` to mean anything, the tab itself (with its empty state) is real UI work that lands in Phase C, and gets its full program-list/upload capability once Phase D's validator and endpoints exist. The starter-prompt `.md` content is a copy asset from Eric, not something to draft speculatively.
 

@@ -86,3 +86,79 @@ export async function getCurrentProgram(db, userEmail) {
     content: JSON.parse(row.content),
   };
 }
+
+export async function listPrograms(db, userEmail) {
+  const { results } = await db
+    .prepare(
+      `SELECT p.id, p.name, p.sport, p.status, p.start_date, p.created_at, COUNT(pv.id) as version_count
+       FROM program p LEFT JOIN program_version pv ON pv.program_id = p.id
+       WHERE p.user_email = ?
+       GROUP BY p.id
+       ORDER BY p.created_at DESC`,
+    )
+    .bind(userEmail)
+    .all();
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    sport: r.sport,
+    status: r.status,
+    startDate: r.start_date,
+    createdAt: r.created_at,
+    versionCount: r.version_count,
+  }));
+}
+
+// Authorization helper: callers must check the returned email matches the
+// authenticated request's userEmail before allowing a version append or
+// activation -- this is the piece that stops user A from modifying or
+// activating user B's program by guessing/enumerating an id. Returns null if
+// the program doesn't exist.
+export async function getProgramOwner(db, programId) {
+  const row = await db.prepare(`SELECT user_email FROM program WHERE id = ?`).bind(programId).first();
+  return row ? row.user_email : null;
+}
+
+export async function createProgram(db, userEmail, { id, name, sport, content }) {
+  await upsertUser(db, userEmail);
+  const versionId = crypto.randomUUID();
+  await db.batch([
+    db
+      .prepare(`INSERT INTO program (id, user_email, name, sport, status, start_date) VALUES (?, ?, ?, ?, 'draft', ?)`)
+      .bind(id, userEmail, name, sport ?? null, content.startDate ?? null),
+    db
+      .prepare(
+        `INSERT INTO program_version (id, program_id, version_no, content, change_summary, source)
+         VALUES (?, ?, 1, ?, 'Initial upload', 'upload')`,
+      )
+      .bind(versionId, id, JSON.stringify(content)),
+  ]);
+  return { programId: id, versionId, versionNo: 1 };
+}
+
+// version_no assignment is a single atomic INSERT...SELECT rather than a
+// separate SELECT MAX + INSERT -- the latter is a race under concurrent
+// writers/retries (see PLANNING.md's integrity mechanics).
+export async function addProgramVersion(db, programId, { content, changeSummary }) {
+  const versionId = crypto.randomUUID();
+  await db
+    .prepare(
+      `INSERT INTO program_version (id, program_id, version_no, content, change_summary, source)
+       SELECT ?, ?, COALESCE(MAX(version_no), 0) + 1, ?, ?, 'upload'
+       FROM program_version WHERE program_id = ?`,
+    )
+    .bind(versionId, programId, JSON.stringify(content), changeSummary ?? null, programId)
+    .run();
+  const row = await db.prepare(`SELECT version_no FROM program_version WHERE id = ?`).bind(versionId).first();
+  return { versionId, versionNo: row.version_no };
+}
+
+// Archive-old + activate-new runs as one D1 batch (implicit transaction) --
+// two sequential .run() calls could leave zero or two "current" programs for
+// this user if the worker dies mid-sequence (see PLANNING.md).
+export async function activateProgram(db, userEmail, programId) {
+  await db.batch([
+    db.prepare(`UPDATE program SET status = 'archived' WHERE user_email = ? AND status = 'current'`).bind(userEmail),
+    db.prepare(`UPDATE program SET status = 'current' WHERE id = ? AND user_email = ?`).bind(programId, userEmail),
+  ]);
+}

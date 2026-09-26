@@ -1,0 +1,147 @@
+{
+  "displayName": "Base Strength",
+  "units": "lb",
+  "startDate": "2027-01-04",
+  "periods": [
+    { "n": 1, "phase": "Intro week", "lengthDays": 7 },
+    { "n": 2, "phase": "Foundation", "lengthDays": 7 },
+    { "n": 3, "phase": "Foundation", "lengthDays": 7 },
+    { "n": 4, "phase": "Deload + retest", "lengthDays": 7, "deload": true }
+  ],
+  "ongoingPeriod": { "phase": "Maintenance", "startDate": "2027-02-01" },
+  "seedMaxes": { "squat": 185 },
+  "testDefinitions": [
+    { "key": "squat", "label": "Back squat", "unit": "lb × reps", "kind": "load-reps-e1rm" },
+    { "key": "row", "label": "Single-arm row 8RM", "unit": "lb", "kind": "max-load" },
+    { "key": "pullup", "label": "Pull-up max", "unit": "reps", "kind": "max-value" }
+  ],
+  "videos": {
+    "goblet": "https://www.youtube.com/watch?v=MeIiIdhvXT4"
+  },
+  "circuits": {
+    "finisher": "20 air squats -> 10 push-ups -> 20 mountain climbers, no rest between exercises, 3 min between rounds."
+  },
+  "activation": {
+    "A": "Band pull-aparts 2x15 -> glute bridges 2x10 -> scap push-ups 2x10",
+    "B": "Cossack squat 2x8/side -> dead bug 2x10/side"
+  },
+  "warmupTemplates": [
+    {
+      "key": "bikeA",
+      "ergName": "Assault bike",
+      "erg": [
+        ["0–3 min", "Easy, nasal breathing", "RPE 3"],
+        ["3–5 min", "Steady build", "RPE 5"],
+        ["5 min", "Easy to settle", "RPE 2"]
+      ],
+      "mobility": "Ankle rocks 10/side · hip circles 8/side",
+      "activationGroup": "A"
+    },
+    {
+      "key": "bikeB",
+      "ergName": "Assault bike",
+      "erg": [
+        ["0–3 min", "Easy, nasal breathing", "RPE 3"],
+        ["3–5 min", "Steady build", "RPE 5"],
+        ["5 min", "Easy to settle", "RPE 2"]
+      ],
+      "mobility": "90/90 hip switches 8/side",
+      "activationGroup": "B"
+    }
+  ],
+  "sessionTemplates": [
+    {
+      "key": "D1",
+      "title": "Intro: technique + baseline",
+      "shortLabel": "Day 1",
+      "scope": { "type": "period", "n": 1 },
+      "warmupTemplate": "bikeA",
+      "isTest": true,
+      "testDayNote": "First time through -- go light, focus on form.",
+      "items": [
+        {
+          "name": "Goblet squat",
+          "rx": "3×8 RPE 6",
+          "options": { "v": "goblet", "n": "Elbows inside knees at the bottom." }
+        },
+        {
+          "name": "Back squat 5RM",
+          "rx": "3×5",
+          "options": { "lift": "squat", "t": "squat", "n": "Ramp up, stop at RPE 8." }
+        },
+        {
+          "name": "Single-arm row 8RM",
+          "rx": "3×8",
+          "options": { "t": "row" }
+        },
+        {
+          "name": "Strict pull-up, max reps",
+          "rx": "1×1",
+          "options": { "bw": 1, "norpe": 1, "t": "pullup" }
+        }
+      ]
+    },
+    {
+      "key": "A",
+      "title": "Squat + row",
+      "shortLabel": "A · Lower",
+      "scope": { "type": "periodRange", "periods": [2, 3, 4] },
+      "warmupTemplate": "bikeA",
+      "items": [
+        {
+          "name": "Back squat",
+          "rx": { "2": "4×6 @ 70%", "3": "4×5 @ 75%", "4": "3×5 @ 65%" },
+          "options": { "lift": "squat", "pct": 0.7, "n": "3 min rest." }
+        },
+        {
+          "name": "Single-arm row",
+          "rx": { "2": "3×10", "3": "3×8", "4": "2×8" },
+          "options": {}
+        },
+        {
+          "name": "Finisher circuit",
+          "rx": { "2": "2 rounds", "3": "2 rounds", "4": "—" },
+          "options": { "circuit": "finisher", "norpe": 1, "u": "rounds" }
+        }
+      ]
+    },
+    {
+      "key": "B",
+      "title": "Pull + core",
+      "shortLabel": "B · Upper",
+      "scope": { "type": "periodRange", "periods": [2, 3, 4] },
+      "warmupTemplate": "bikeB",
+      "items": [
+        {
+          "name": "Pull-up, strict or weighted",
+          "rx": { "2": "4×5 RPE 7", "3": "4×4 RPE 7", "4": "3×5 RPE 6" },
+          "options": { "group": "A", "n": "Add weight once 5x5 strict is easy." }
+        },
+        {
+          "name": "Copenhagen plank",
+          "rx": { "2": "3×20 s", "3": "3×25 s", "4": "2×20 s" },
+          "options": { "bw": 1, "u": "s", "group": "A", "desc": "Side-lying hip adductor hold: top leg rests on a bench, bottom leg lifts toward it. Paired with pull-ups here -- hold the plank during your pull-up rest instead of standing around." }
+        }
+      ]
+    },
+    {
+      "key": "M",
+      "title": "Maintenance",
+      "shortLabel": "Maintenance",
+      "scope": { "type": "ongoing" },
+      "warmupTemplate": "bikeA",
+      "items": [
+        {
+          "name": "Back squat",
+          "rx": "3×3 @ 80%",
+          "options": { "lift": "squat", "pct": 0.8 }
+        },
+        {
+          "name": "Pull-up, strict or weighted",
+          "rx": "3×5 RPE 7",
+          "options": {}
+        }
+      ]
+    }
+  ]
+}

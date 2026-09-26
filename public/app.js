@@ -1,41 +1,55 @@
-/* Ski Strength Log — offline gym logger. Data lives in this browser (localStorage);
-   Export sends it to Claude, who updates the program, which now lives in D1
-   (see PLANNING.md) with the static program.js kept only as an offline/
-   emergency-rollback fallback. */
+/* Training Log — offline gym logger, program content is user-uploaded and
+   generic (see PLANNING.md), not tied to any one sport. Data lives in this
+   browser (localStorage); Export sends it to Claude, who updates the program,
+   which lives in D1, with the static program.js kept only as an offline/
+   emergency-rollback fallback for the original ski program. */
 import { currentPeriod, getSession as engineGetSession, periodEnd, periodPhase, periodStart, sessionKeysFor } from "./programEngine.js";
 import { transformLegacyProgram } from "./legacyProgramAdapter.js";
 
-// Feature flag (PLANNING.md Phase B): which program source to read from.
-// Revertible without a redeploy -- flip via ?src=static / ?src=api in the
-// URL (persists to localStorage), or clear localStorage's ssl:programSource
-// key directly. Defaults to "static" until the API path is verified.
+// Feature flag: which program source to read from. Revertible without a
+// redeploy -- flip via ?src=static / ?src=api in the URL (persists to
+// localStorage), or clear localStorage's ssl:programSource key directly.
+// Defaults to "api" now that Phase B/C/D are live -- "static" (the bundled,
+// Eric-specific ski program) is an explicit emergency override only, never a
+// silent fallback for another user's failed/empty fetch (see resolveProgram).
 function resolveProgramSourceFlag() {
   const qp = new URLSearchParams(location.search).get("src");
   if (qp === "api" || qp === "static") {
     try { localStorage.setItem("ssl:programSource", qp); } catch (e) {}
     return qp;
   }
-  try { return localStorage.getItem("ssl:programSource") || "static"; } catch (e) { return "static"; }
+  try { return localStorage.getItem("ssl:programSource") || "api"; } catch (e) { return "api"; }
 }
 
+// Returns { content, meta }. `content` is null when there's genuinely no
+// program to show -- a brand-new user with zero programs, an unauthenticated
+// request, or an unrecoverable fetch error with no cached copy. It must NEVER
+// silently substitute a different program (e.g. the bundled static ski file)
+// in place of "this user has none yet" -- that was a real bug: every path
+// used to fall through to `window.PROGRAM` regardless of why the fetch came
+// back empty, so a second user with no program of their own silently saw
+// Eric's ski program instead of an empty state.
 async function resolveProgram() {
-  if (resolveProgramSourceFlag() === "api") {
-    try {
-      const res = await fetch("/api/programs/current");
-      if (res.ok) {
-        const { program } = await res.json();
-        if (program && program.content) {
-          try { localStorage.setItem("ssl:program:lastGood", JSON.stringify(program.content)); } catch (e) {}
-          return { content: program.content, meta: { source: "api", programId: program.programId, versionNo: program.versionNo } };
-        }
-      }
-    } catch (e) { /* fall through to a cached or static copy below */ }
-    try {
-      const cached = localStorage.getItem("ssl:program:lastGood");
-      if (cached) return { content: JSON.parse(cached), meta: { source: "api-cache" } };
-    } catch (e) { /* fall through to static */ }
+  if (resolveProgramSourceFlag() === "static") {
+    return { content: transformLegacyProgram(window.PROGRAM, "Ski Strength"), meta: { source: "static" } };
   }
-  return { content: transformLegacyProgram(window.PROGRAM, "Ski Strength"), meta: { source: "static" } };
+  try {
+    const res = await fetch("/api/programs/current");
+    if (res.ok) {
+      const { program } = await res.json();
+      if (program && program.content) {
+        try { localStorage.setItem("ssl:program:lastGood", JSON.stringify(program.content)); } catch (e) {}
+        return { content: program.content, meta: { source: "api", programId: program.programId, versionNo: program.versionNo } };
+      }
+      return { content: null, meta: { source: "none" } }; // authenticated, just no current program yet
+    }
+    if (res.status === 401) return { content: null, meta: { source: "unauthorized" } };
+  } catch (e) { /* network error -- fall through to this device's own cache below */ }
+  try {
+    const cached = localStorage.getItem("ssl:program:lastGood");
+    if (cached) return { content: JSON.parse(cached), meta: { source: "api-cache" } };
+  } catch (e) { /* fall through to the error state */ }
+  return { content: null, meta: { source: "error" } };
 }
 
 (async function () {
@@ -43,10 +57,16 @@ async function resolveProgram() {
   const { content: P, meta: programMeta } = await resolveProgram();
   const $ = (s, el = document) => el.querySelector(s);
   const app = $("#app");
-  document.title = P.displayName || document.title;
+  // Branding is entirely program-driven, never a hardcoded sport/program name
+  // in the markup -- this runs unconditionally (not just when a program
+  // loads) so a brand-new user with no program yet, or a program missing
+  // displayName, gets this generic fallback instead of stale HTML defaults
+  // or a blank brand.
+  const DEFAULT_APP_NAME = "Training Log";
+  document.title = (P && P.displayName) || DEFAULT_APP_NAME;
   const brandEl = $(".brand");
-  if (brandEl && brandEl.firstChild) brandEl.firstChild.textContent = P.displayName || "";
-  const UNIT = P.units || "lb";
+  if (brandEl && brandEl.firstChild) brandEl.firstChild.textContent = (P && P.displayName) || DEFAULT_APP_NAME;
+  const UNIT = P?.units || "lb";
   // Plate/increment granularity for %-of-max target rounding depends on the
   // unit -- nearest-5kg is a huge jump (11 lb), nearest-2.5kg is the sane
   // equivalent of the old fixed nearest-5lb rounding.
@@ -75,7 +95,7 @@ async function resolveProgram() {
   // this file already assume it), translating to/from the engine's "ongoing"
   // sentinel only at these boundary functions.
   const toEnginePeriod = w => w === "S" ? "ongoing" : w;
-  const currentWeek = () => { const p = currentPeriod(P, new Date()); return p === "ongoing" ? "S" : p; };
+  const currentWeek = () => { if (!P) return 1; const p = currentPeriod(P, new Date()); return p === "ongoing" ? "S" : p; };
   const PHASE = w => periodPhase(P, toEnginePeriod(w));
   const weekLabel = w => w === "S" ? "In-season" : `Week ${w}`;
   const weekDates = w => {
@@ -84,7 +104,7 @@ async function resolveProgram() {
   };
 
   /* ---------- program model ---------- */
-  const WEEKS = P.periods.map(p => p.n).concat("S");
+  const WEEKS = P ? P.periods.map(p => p.n).concat("S") : [];
   function sessionKeys(w) {
     return sessionKeysFor(P, toEnginePeriod(w));
   }
@@ -201,7 +221,7 @@ async function resolveProgram() {
   }
 
   /* ---------- UI state ---------- */
-  let view = "session";
+  let view = P ? "session" : "start";
   let selWeek = currentWeek();
   let selKey = null;
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
@@ -290,7 +310,7 @@ async function resolveProgram() {
       <details class="panel" id="warm" open>
         <summary><span><h2>Warm-up · ${esc(warmupTpl.ergName)}</h2><span class="progress">7 min erg · mobility · activation · ~14 min</span></span></summary>
         <div class="panel-body">
-          <table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${r[0]}</td><td>${esc(r[1])}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table>
+          <table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table>
           ${noSpikes ? '<p class="note-muted">Skip the spikes today (ME, deload or ski-specific day).</p>' : ""}
           ${s.testDayNote ? `<p class="note-muted">${esc(s.testDayNote)}</p>` : ""}
           <p class="kv"><b>Mobility · 3 min</b>${esc(warmupTpl.mobility)}</p>
@@ -387,10 +407,10 @@ async function resolveProgram() {
     el.innerHTML = `
       <summary>
         <div class="ex-top">
-          <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
+          <div class="ex-name">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
           <div class="ex-actions">
             <span class="ex-done-badge" hidden>✓ Done</span>
-            ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
+            ${url ? `<a class="vid" href="${esc(url)}" target="_blank" rel="noopener">Video ↗</a>` : ""}
             <span class="disclosure" aria-hidden="true"></span>
           </div>
         </div>
@@ -524,8 +544,8 @@ async function resolveProgram() {
         <div class="ex-sub" data-i="${i}">
           <div class="ex-sub-label">${esc(groupKey)}${gi + 1}</div>
           <div class="ex-top">
-            <div class="ex-name">${url ? `<a href="${url}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
-            ${url ? `<a class="vid" href="${url}" target="_blank" rel="noopener">Video ↗</a>` : ""}
+            <div class="ex-name">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(it.name)}</a>` : esc(it.name)}${it.desc ? `<button type="button" class="ex-info" aria-expanded="false" aria-controls="desc-${s.id}-${i}" aria-label="What is ${esc(it.name)}?">ⓘ</button>` : ""}</div>
+            ${url ? `<a class="vid" href="${esc(url)}" target="_blank" rel="noopener">Video ↗</a>` : ""}
           </div>
           ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
           <div class="rx">${esc(it.rx)}</div>
@@ -698,7 +718,7 @@ async function resolveProgram() {
   // "lift"/"max-load"/"max-value" are app.js's own local sentinels (kept for
   // the pre-existing load+reps-pair rendering below), translated from the
   // program schema's own kind vocabulary: load-reps-e1rm / max-load / max-value.
-  const TEST_FIELDS = P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : t.kind]);
+  const TEST_FIELDS = P ? P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : t.kind]) : [];
   const kindForTest = key => (TEST_FIELDS.find(f => f[0] === key) || [])[3];
   function testsFromEntry(e) {
     const v = {};
@@ -889,10 +909,135 @@ async function resolveProgram() {
     toast(`Imported ${newEntries.length} session${newEntries.length === 1 ? "" : "s"}`); render();
   }
 
+  /* ---------- getting started / program management ---------- */
+  async function loadProgramList(box) {
+    box.innerHTML = `<p class="note-muted">Loading…</p>`;
+    let programs;
+    try {
+      const res = await fetch("/api/programs");
+      if (res.status === 401) { box.innerHTML = `<p class="empty">Signed out — reload the page to sign back in.</p>`; return; }
+      if (!res.ok) throw new Error("bad status");
+      ({ programs } = await res.json());
+    } catch (e) {
+      box.innerHTML = `<p class="empty">Couldn't load your programs. Check your connection and try again.</p>`;
+      return;
+    }
+    if (!programs.length) { box.innerHTML = `<p class="empty">No programs yet — upload one below to get started.</p>`; return; }
+    box.innerHTML = "";
+    programs.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "entry";
+      row.innerHTML = `<div class="b" style="padding:12px 14px">
+        <p><span class="x">${esc(p.name)}</span>${p.sport ? ` · ${esc(p.sport)}` : ""}</p>
+        <p class="progress">${esc(p.status)} · v${p.versionCount}${p.startDate ? ` · starts ${esc(p.startDate)}` : ""}</p>
+        ${p.status !== "current" ? `<button type="button" class="link-btn" data-activate="${esc(p.id)}">Activate</button>` : ""}
+      </div>`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll("[data-activate]").forEach(btn => btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = "Activating…";
+      try {
+        const res = await fetch(`/api/programs/${encodeURIComponent(btn.dataset.activate)}/activate`, { method: "POST" });
+        if (!res.ok) throw new Error("bad status");
+        toast("Activated. Reloading…");
+        setTimeout(() => location.reload(), 600);
+      } catch (e) {
+        toast("Couldn't activate that program"); btn.disabled = false; btn.textContent = "Activate";
+      }
+    });
+  }
+
+  function renderStart() {
+    $("#phaseLine").textContent = "Getting started";
+    app.innerHTML = `
+      <div class="head"><div class="eyebrow">Program management</div><h1>Getting started</h1></div>
+      ${P ? "" : `<p class="empty">You don't have a training program yet. Build one with Claude using the guide below, then upload it here.</p>`}
+      <details class="panel" open>
+        <summary><h2>Build a program with Claude</h2></summary>
+        <div class="panel-body">
+          <p class="note-muted">No coach or written plan yet? Use this guide in a chat with Claude to design one, then upload the result below.</p>
+          <p class="kv"><a href="build-your-training-plan.md" target="_blank" rel="noopener">Program-building guide</a></p>
+          <p class="kv"><a href="program.schema.json" target="_blank" rel="noopener">Program schema (for Claude to follow)</a></p>
+          <p class="kv"><a href="example-program.json" target="_blank" rel="noopener">Example program</a></p>
+        </div>
+      </details>
+      <details class="panel" open>
+        <summary><h2>Your programs</h2></summary>
+        <div class="panel-body" id="progListBody"></div>
+      </details>
+      <details class="panel">
+        <summary><h2>Upload a program</h2></summary>
+        <div class="panel-body">
+          <div class="grid2">
+            <div><label class="lab" for="progName">Name</label><div class="field"><input id="progName" placeholder="2027 Off-season"></div></div>
+            <div><label class="lab" for="progSport">Sport (optional)</label><div class="field"><input id="progSport" placeholder="ski"></div></div>
+          </div>
+          <label class="lab" for="progFile" style="margin-top:12px">Upload a .json file</label>
+          <input type="file" id="progFile" accept="application/json,.json">
+          <label class="lab" for="progPaste" style="margin-top:12px">…or paste program JSON</label>
+          <textarea id="progPaste" placeholder='{"startDate": "2027-01-04", ...}'></textarea>
+          <p class="note-muted" id="uploadErrors" hidden></p>
+          <button type="button" class="primary" id="progUpload">Validate + create draft</button>
+          <p class="note-muted">Creates a draft — it won't replace your active program until you tap Activate above.</p>
+        </div>
+      </details>`;
+
+    loadProgramList($("#progListBody"));
+
+    $("#progFile").onchange = async ev => {
+      const f = ev.target.files[0];
+      if (f) $("#progPaste").value = await f.text();
+    };
+
+    $("#progUpload").onclick = async () => {
+      const errBox = $("#uploadErrors");
+      errBox.hidden = true;
+      const name = $("#progName").value.trim();
+      const sport = $("#progSport").value.trim();
+      const raw = $("#progPaste").value;
+      if (!name) { errBox.hidden = false; errBox.textContent = "Name is required."; return; }
+      let content;
+      try { content = JSON.parse(raw); }
+      catch (e) { errBox.hidden = false; errBox.textContent = "That doesn't look like valid JSON — check for a missing comma or bracket."; return; }
+
+      const btn = $("#progUpload");
+      btn.disabled = true; btn.textContent = "Validating…";
+      try {
+        const res = await fetch("/api/programs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, sport: sport || null, content }),
+        });
+        if (res.status === 401) { errBox.hidden = false; errBox.textContent = "Signed out — reload the page to sign back in."; return; }
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errBox.hidden = false;
+          errBox.textContent = Array.isArray(body.details) && body.details.length
+            ? `Fix these issues and try again:\n${body.details.join("\n")}`
+            : body.error || "Couldn't create the program.";
+          errBox.style.whiteSpace = "pre-line";
+          return;
+        }
+        toast("Draft created. Activate it above when you're ready.");
+        $("#progName").value = ""; $("#progSport").value = ""; $("#progPaste").value = ""; $("#progFile").value = "";
+        loadProgramList($("#progListBody"));
+      } catch (e) {
+        errBox.hidden = false; errBox.textContent = "Network error — check your connection and try again.";
+      } finally {
+        btn.disabled = false; btn.textContent = "Validate + create draft";
+      }
+    };
+  }
+
   /* ---------- shell ---------- */
   function render() {
+    if (!P && view !== "start") view = "start"; // no program to log against, view Session/Log/Tests/Progress
     document.querySelectorAll(".nav button").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
-    if (view === "session") renderSession(); else if (view === "log") renderLog(); else if (view === "tests") renderTests(); else renderProgress();
+    if (view === "session") renderSession();
+    else if (view === "log") renderLog();
+    else if (view === "tests") renderTests();
+    else if (view === "progress") renderProgress();
+    else renderStart();
   }
   document.querySelectorAll(".nav button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); window.scrollTo(0, 0); });
   // a background sync pull merged in data from another device; re-render

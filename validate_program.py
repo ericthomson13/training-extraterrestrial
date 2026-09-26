@@ -16,7 +16,22 @@ every cross-reference check below, which is the harder-to-get-wrong half of
 No dependencies required to run -- stdlib only, `jsonschema` is optional.
 """
 import json
+import re
 import sys
+
+# testDefinitions/warmupTemplates/sessionTemplates keys become DOM element ids
+# and data-attribute values in the app (see public/app.js's `s.id`,
+# `data-key`, `id="t-${k}..."` etc.) -- HTML-escaping doesn't help an id, an
+# escaped value just fails to match the id it was supposed to name. So these
+# stay restricted to a safe identifier charset. Kept in sync by hand with
+# functions/_lib/programValidator.js's KEY_RE and program.schema.json's key
+# patterns -- if you change one, change all three.
+KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+
+
+def check_key(errors, path, value):
+    if not isinstance(value, str) or not value or len(value) > 50 or not KEY_RE.match(value):
+        errors.append(f"{path}: must be a short identifier -- letters, numbers, underscore, starting with a letter (max 50 chars)")
 
 
 def load(path):
@@ -83,6 +98,18 @@ def reference_checks(program):
     activation_keys = set(program.get("activation", {}).keys())
     warmup_keys = {w.get("key") for w in program.get("warmupTemplates", []) if isinstance(w, dict)}
     seed_max_keys = set(program.get("seedMaxes", {}).keys())
+
+    for i, t in enumerate(program.get("testDefinitions", [])):
+        if isinstance(t, dict):
+            check_key(errors, f"testDefinitions[{i}].key", t.get("key"))
+
+    for i, w in enumerate(program.get("warmupTemplates", [])):
+        if isinstance(w, dict):
+            check_key(errors, f"warmupTemplates[{i}].key", w.get("key"))
+
+    for i, session in enumerate(program.get("sessionTemplates", [])):
+        if isinstance(session, dict):
+            check_key(errors, f"sessionTemplates[{i}].key", session.get("key"))
 
     for w in program.get("warmupTemplates", []):
         if not isinstance(w, dict):

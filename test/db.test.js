@@ -1,6 +1,18 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { deleteSession, getCurrentProgram, listSessions, listTests, upsertSession, upsertTest } from "../functions/_lib/db.js";
+import {
+  activateProgram,
+  addProgramVersion,
+  createProgram,
+  deleteSession,
+  getCurrentProgram,
+  getProgramOwner,
+  listPrograms,
+  listSessions,
+  listTests,
+  upsertSession,
+  upsertTest,
+} from "../functions/_lib/db.js";
 
 const EMAIL = "eric@example.com";
 
@@ -152,5 +164,78 @@ describe("getCurrentProgram", () => {
 
     const result = await getCurrentProgram(env.DB, "someone-else@example.com");
     expect(result).toBeNull();
+  });
+});
+
+describe("createProgram / addProgramVersion / activateProgram / listPrograms / getProgramOwner", () => {
+  it("createProgram creates a draft program with version 1, not visible via getCurrentProgram until activated", async () => {
+    const email = "creator@example.com";
+    const { programId, versionNo } = await createProgram(env.DB, email, {
+      id: "prog-create-1",
+      name: "New Season",
+      sport: "ski",
+      content: { displayName: "V1", startDate: "2026-01-01" },
+    });
+    expect(programId).toBe("prog-create-1");
+    expect(versionNo).toBe(1);
+    expect(await getCurrentProgram(env.DB, email)).toBeNull();
+
+    const owner = await getProgramOwner(env.DB, "prog-create-1");
+    expect(owner).toBe(email);
+  });
+
+  it("getProgramOwner returns null for a nonexistent program id", async () => {
+    expect(await getProgramOwner(env.DB, "does-not-exist")).toBeNull();
+  });
+
+  it("addProgramVersion assigns sequential version numbers atomically, never reusing or skipping", async () => {
+    const email = "versioner@example.com";
+    await createProgram(env.DB, email, { id: "prog-ver-1", name: "Season", content: { displayName: "V1" } });
+    const v2 = await addProgramVersion(env.DB, "prog-ver-1", { content: { displayName: "V2" }, changeSummary: "tweak" });
+    const v3 = await addProgramVersion(env.DB, "prog-ver-1", { content: { displayName: "V3" } });
+    expect(v2.versionNo).toBe(2);
+    expect(v3.versionNo).toBe(3);
+  });
+
+  it("activateProgram archives the previously-current program and activates the new one, leaving exactly one current", async () => {
+    const email = "activator@example.com";
+    await createProgram(env.DB, email, { id: "prog-act-1", name: "Season 1", content: { displayName: "S1" } });
+    await activateProgram(env.DB, email, "prog-act-1");
+    expect((await getCurrentProgram(env.DB, email)).programId).toBe("prog-act-1");
+
+    await createProgram(env.DB, email, { id: "prog-act-2", name: "Season 2", content: { displayName: "S2" } });
+    await activateProgram(env.DB, email, "prog-act-2");
+
+    expect((await getCurrentProgram(env.DB, email)).programId).toBe("prog-act-2");
+    const { results } = await env.DB.prepare(`SELECT id, status FROM program WHERE user_email = ?`).bind(email).all();
+    const current = results.filter((r) => r.status === "current");
+    expect(current.length).toBe(1);
+    expect(current[0].id).toBe("prog-act-2");
+    expect(results.find((r) => r.id === "prog-act-1").status).toBe("archived");
+  });
+
+  it("activateProgram scoped by user_email cannot activate another user's program id", async () => {
+    const owner = "owner-a@example.com";
+    const attacker = "attacker-b@example.com";
+    await createProgram(env.DB, owner, { id: "prog-scoped-1", name: "Owner's", content: { displayName: "Owner" } });
+    await activateProgram(env.DB, attacker, "prog-scoped-1");
+    expect(await getCurrentProgram(env.DB, attacker)).toBeNull();
+    const row = await env.DB.prepare(`SELECT status FROM program WHERE id = ?`).bind("prog-scoped-1").first();
+    expect(row.status).toBe("draft");
+  });
+
+  it("listPrograms returns a user's programs with version counts, most recent first, scoped by user_email", async () => {
+    const email = "lister@example.com";
+    const other = "other-lister@example.com";
+    await createProgram(env.DB, email, { id: "prog-list-1", name: "First", content: { displayName: "A" } });
+    await createProgram(env.DB, email, { id: "prog-list-2", name: "Second", content: { displayName: "B" } });
+    await addProgramVersion(env.DB, "prog-list-2", { content: { displayName: "B2" } });
+    await createProgram(env.DB, other, { id: "prog-list-other", name: "Not mine", content: { displayName: "C" } });
+
+    const programs = await listPrograms(env.DB, email);
+    expect(programs.length).toBe(2);
+    expect(programs.find((p) => p.id === "prog-list-other")).toBeUndefined();
+    expect(programs.find((p) => p.id === "prog-list-2").versionCount).toBe(2);
+    expect(programs.find((p) => p.id === "prog-list-1").versionCount).toBe(1);
   });
 });

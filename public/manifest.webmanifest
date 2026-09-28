@@ -1,7 +1,7 @@
 {
-  "name": "Ski Strength Log",
-  "short_name": "Ski Strength",
-  "description": "Daily loadout and logger for the 2026–27 ski season strength program.",
+  "name": "Training Log",
+  "short_name": "Training Log",
+  "description": "Offline-first strength training logger for a user-uploaded training program.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

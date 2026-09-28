@@ -87,6 +87,17 @@ export async function getCurrentProgram(db, userEmail) {
   };
 }
 
+// Latest version's content for any program regardless of status -- used to
+// diff an incoming update against (see programLock.js), not just for the
+// current-program read path above.
+export async function getLatestVersion(db, programId) {
+  const row = await db
+    .prepare(`SELECT content FROM program_version WHERE program_id = ? ORDER BY version_no DESC LIMIT 1`)
+    .bind(programId)
+    .first();
+  return row ? JSON.parse(row.content) : null;
+}
+
 export async function listPrograms(db, userEmail) {
   const { results } = await db
     .prepare(

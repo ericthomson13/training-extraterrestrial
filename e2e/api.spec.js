@@ -2,7 +2,7 @@
 // the UI -- these lock in the ownership/auth boundary and the raw validation
 // response shape independent of how app.js happens to render them.
 import { test, expect } from "./fixtures.js";
-import { minimalProgram } from "./helpers.js";
+import { createAndActivateProgram, lockableProgram, minimalProgram } from "./helpers.js";
 
 test("GET /api/programs/current returns null (not an error) for a brand-new user", async ({ request, userEmail }) => {
   const res = await request.get("/api/programs/current", { headers: { "X-Test-User-Email": userEmail } });
@@ -67,6 +67,23 @@ test("a user cannot version or activate another user's program (404, not found)"
   const listAsOther = await request.get("/api/programs", { headers: { "X-Test-User-Email": otherUserEmail } });
   const { programs } = await listAsOther.json();
   expect(programs.find((p) => p.id === programId)).toBeUndefined();
+});
+
+test("POST /api/programs/:id/versions rejects a change to an already-happened period, even though the document is otherwise valid", async ({ request, userEmail }) => {
+  const programId = await createAndActivateProgram(request, userEmail, { name: "Locked Plan", content: lockableProgram() });
+
+  const updated = lockableProgram();
+  updated.sessionTemplates[0].items[0].rx = "5x5"; // period 1 already happened
+  const res = await request.post(`/api/programs/${programId}/versions`, {
+    headers: { "X-Test-User-Email": userEmail },
+    data: { content: updated },
+  });
+  expect(res.status()).toBe(422);
+  const body = await res.json();
+  expect(body.details.some((e) => e.includes("period 1") && e.includes("already happened"))).toBe(true);
+
+  const list = await (await request.get("/api/programs", { headers: { "X-Test-User-Email": userEmail } })).json();
+  expect(list.programs.find((p) => p.id === programId).versionCount).toBe(1);
 });
 
 test("addProgramVersion assigns sequential version numbers via the real HTTP endpoint", async ({ request, userEmail }) => {

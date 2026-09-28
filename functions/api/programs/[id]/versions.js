@@ -1,5 +1,6 @@
-import { addProgramVersion, getProgramOwner } from "../../../_lib/db.js";
+import { addProgramVersion, getLatestVersion, getProgramOwner } from "../../../_lib/db.js";
 import { validateProgram } from "../../../_lib/programValidator.js";
+import { findUpdateViolations } from "../../../_lib/programLock.js";
 
 const SUMMARY_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
 
@@ -33,6 +34,17 @@ export async function onRequestPost(context) {
   errors.push(...contentErrors);
   if (errors.length > 0) {
     return Response.json({ error: "Invalid program", details: errors }, { status: 422 });
+  }
+
+  // An update may only revise periods that haven't happened yet -- diff
+  // against whatever the latest version already says, not just structurally
+  // validate the new document in isolation.
+  const previous = await getLatestVersion(context.env.DB, programId);
+  if (previous) {
+    const lockErrors = findUpdateViolations(previous, body.content);
+    if (lockErrors.length > 0) {
+      return Response.json({ error: "Update would change periods that already happened", details: lockErrors }, { status: 422 });
+    }
   }
 
   try {

@@ -185,8 +185,9 @@ When they come back with a log export or notes:
    - **Keep exercise names exactly the same** unless the exercise itself changes. The app matches history by name.
    - If an exercise was misunderstood (they did a different movement), rename it clearly and add a `desc`.
    - Update seed maxes from real test results. Tested numbers always win over estimates.
-4. Give them the updated program file with a short change summary for the app's version history.
-5. Adjust the calendar if life happened. Shift phases instead of cramming missed work.
+   - **Only change periods that haven't happened yet.** The app rejects an update outright if it changes a period's phase, length, sessions, or any session's content once that period has already started — `startDate` and `units` can never change at all once a program has a history. If a period needs correcting after the fact, don't try to edit it; add a note in your reply and move on. This can't lose data either way: what they actually logged is stored separately from the plan and is never affected by a plan update.
+4. Give them the updated program file with a short change summary. In the app, this goes through the current program's **Update** button (on its Getting Started tab), not the main upload form — that creates a new version of the same program, keeping its full history, rather than a separate program.
+5. Adjust the calendar for periods still ahead if life happened — shift future phases rather than cramming missed work in behind schedule; a week that already happened can't be extended or moved after the fact (see above).
 
 Rules of thumb for adjusting:
 - **Too easy:** every set of a lift comes in 2 or more RPE under target. Raise load 5–10% next time.

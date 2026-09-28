@@ -910,6 +910,68 @@ async function resolveProgram() {
   }
 
   /* ---------- getting started / program management ---------- */
+  // Inline update form for the current program -- same paste/file interaction
+  // as "Upload a program" below, but posts a new version onto this program id
+  // (POST /api/programs/:id/versions) instead of creating a new one. No
+  // name/sport fields since those belong to the program row, not a version.
+  function programUpdateFormHTML(id) {
+    return `<div class="update-form" id="updateForm-${id}" hidden>
+      <label class="lab" for="updFile-${id}" style="margin-top:12px">Upload a .json file</label>
+      <input type="file" id="updFile-${id}" accept="application/json,.json">
+      <label class="lab" for="updPaste-${id}" style="margin-top:12px">…or paste the updated program JSON</label>
+      <textarea id="updPaste-${id}" placeholder='{"startDate": "2027-01-04", ...}'></textarea>
+      <label class="lab" for="updSummary-${id}" style="margin-top:12px">What changed? (optional)</label>
+      <div class="field"><input id="updSummary-${id}" placeholder="Adjusted weeks 5–8 based on how testing went"></div>
+      <p class="note-muted" id="updErrors-${id}" hidden></p>
+      <button type="button" class="primary" id="updSubmit-${id}">Validate + save update</button>
+      <p class="note-muted">Periods that have already happened can't be changed by an update — only the parts still ahead.</p>
+    </div>`;
+  }
+
+  function wireProgramUpdateForm(id, onSaved) {
+    const toggleBtn = document.getElementById(`update-${id}`);
+    const form = document.getElementById(`updateForm-${id}`);
+    const fileInput = document.getElementById(`updFile-${id}`);
+    const pasteInput = document.getElementById(`updPaste-${id}`);
+    const errBox = document.getElementById(`updErrors-${id}`);
+    const submitBtn = document.getElementById(`updSubmit-${id}`);
+
+    toggleBtn.onclick = () => { form.hidden = !form.hidden; };
+    fileInput.onchange = async ev => { const f = ev.target.files[0]; if (f) pasteInput.value = await f.text(); };
+
+    submitBtn.onclick = async () => {
+      errBox.hidden = true;
+      let content;
+      try { content = JSON.parse(pasteInput.value); }
+      catch (e) { errBox.hidden = false; errBox.textContent = "That doesn't look like valid JSON — check for a missing comma or bracket."; return; }
+
+      submitBtn.disabled = true; submitBtn.textContent = "Validating…";
+      try {
+        const res = await fetch(`/api/programs/${encodeURIComponent(id)}/versions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, changeSummary: document.getElementById(`updSummary-${id}`).value.trim() || null }),
+        });
+        if (res.status === 401) { errBox.hidden = false; errBox.textContent = "Signed out — reload the page to sign back in."; return; }
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errBox.hidden = false;
+          errBox.textContent = Array.isArray(body.details) && body.details.length
+            ? `Fix these issues and try again:\n${body.details.join("\n")}`
+            : body.error || "Couldn't save the update.";
+          errBox.style.whiteSpace = "pre-line";
+          return;
+        }
+        toast("Update saved — reloading…");
+        setTimeout(() => location.reload(), 600);
+      } catch (e) {
+        errBox.hidden = false; errBox.textContent = "Network error — check your connection and try again.";
+      } finally {
+        submitBtn.disabled = false; submitBtn.textContent = "Validate + save update";
+      }
+    };
+  }
+
   async function loadProgramList(box) {
     box.innerHTML = `<p class="note-muted">Loading…</p>`;
     let programs;
@@ -927,12 +989,15 @@ async function resolveProgram() {
     programs.forEach(p => {
       const row = document.createElement("div");
       row.className = "entry";
+      const isCurrent = p.status === "current";
       row.innerHTML = `<div class="b" style="padding:12px 14px">
         <p><span class="x">${esc(p.name)}</span>${p.sport ? ` · ${esc(p.sport)}` : ""}</p>
         <p class="progress">${esc(p.status)} · v${p.versionCount}${p.startDate ? ` · starts ${esc(p.startDate)}` : ""}</p>
-        ${p.status !== "current" ? `<button type="button" class="link-btn" data-activate="${esc(p.id)}">Activate</button>` : ""}
+        ${isCurrent ? `<button type="button" class="link-btn" id="update-${esc(p.id)}">Update</button>` : `<button type="button" class="link-btn" data-activate="${esc(p.id)}">Activate</button>`}
+        ${isCurrent ? programUpdateFormHTML(esc(p.id)) : ""}
       </div>`;
       box.appendChild(row);
+      if (isCurrent) wireProgramUpdateForm(p.id);
     });
     box.querySelectorAll("[data-activate]").forEach(btn => btn.onclick = async () => {
       btn.disabled = true; btn.textContent = "Activating…";

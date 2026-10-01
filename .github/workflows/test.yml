@@ -1,5 +1,16 @@
 name: Test
 
+# Unit/integration tests only (vitest) -- fast, no browser, cheap to run on
+# every push. Playwright's e2e suite (npm run test:e2e) is intentionally NOT
+# run here: installing a real browser plus driving it through a live
+# wrangler pages dev instance is the expensive part of this repo's testing,
+# both in CI minutes and wall-clock time, and running it on every push risks
+# burning through the GitHub Actions free-tier allotment. The suite is still
+# fully maintained in e2e/ -- run it locally (`npm run test:e2e`) before
+# merging anything that touches session-logging, program upload/update, or
+# sync, since that's exactly what it covers that vitest can't (the real
+# browser/HTTP/service-worker layer). See e2e/README.md.
+
 on:
   push:
     branches: [main]
@@ -21,28 +32,5 @@ jobs:
 
       - run: npm ci
 
-      # Local-dev auth stand-in only (see functions/api/_middleware.js) --
-      # never a real secret, Access verification is never reached in CI.
-      - name: Write .dev.vars for local dev auth
-        run: |
-          cat > .dev.vars <<'EOF'
-          ENVIRONMENT=development
-          DEV_USER_EMAIL=ci@example.test
-          EOF
-
       - name: Unit + integration tests (vitest)
         run: npm test -- --run
-
-      - name: Install Playwright's browser
-        run: npx playwright install --with-deps chromium
-
-      - name: End-to-end tests (Playwright)
-        run: npm run test:e2e
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7

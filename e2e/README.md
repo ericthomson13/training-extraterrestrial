@@ -4,6 +4,15 @@ Playwright tests against a real `wrangler pages dev` + local D1 — these drive
 the actual browser and HTTP layer, unlike `test/*.test.js` (vitest), which
 calls `functions/_lib/*.js` directly.
 
+**Not run in CI.** Installing a browser and driving it through a live dev
+server is the expensive part of this repo's testing, in both GitHub Actions
+minutes and wall-clock time -- running it on every push risked burning
+through the free-tier allotment. `.github/workflows/test.yml` only runs the
+vitest suite. This suite is still fully maintained and the right one to run
+locally (`npm run test:e2e`) before merging anything touching
+session-logging, program upload/update, or sync -- that's exactly the real
+browser/HTTP/service-worker layer vitest can't reach.
+
 ## Running
 
 ```

@@ -167,6 +167,8 @@ This matters once program content stops being a file only Claude hand-edits and 
 - `GET /api/programs/current` — the live program's latest version content; this is what the PWA fetches once Phase B cuts over.
 - `GET /api/programs` — list a user's programs (name, sport, status, start_date, version count) for a season-history view.
 
+**Non-blocking warnings** (added after a real incident where a program's `startDate` didn't match when training actually started, causing the "next up" week to compute wrong for days before anyone noticed): `validateProgram()` returns `{ valid, errors, warnings }` — `warnings` never affects `valid` or whether the create/update succeeds. Currently one check: `startDate` more than 21 days from today (in either direction) at upload/update time gets flagged, since that's the single biggest lever for the week-bucketing math going wrong. The client shows it as a toast after a successful create/update, not a blocking dialog. Kept in sync by hand across `programValidator.js` and `validate_program.py` (`UNUSUAL_START_DATE_DAYS` in both).
+
 ## New client module: `public/programEngine.js`
 
 The generic-schema interpretation logic (cumulative period walk for `currentWeek()`/`weekStart()`, phase lookup, %-of-max target computation, rx-per-period-number resolution) is factored out of `app.js`'s render functions into its own pure, unit-testable module — not wired into the live UI yet when first written (see Phase A2). `app.js` and `functions/_lib/format.js` both come to depend on `testDefinitions` from program content instead of their current hardcoded/duplicated `TEST_FIELDS` array.

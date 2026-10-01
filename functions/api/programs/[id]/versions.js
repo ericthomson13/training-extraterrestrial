@@ -30,7 +30,7 @@ export async function onRequestPost(context) {
       errors.push("changeSummary: must be a plain string, max length 500");
     }
   }
-  const { errors: contentErrors } = validateProgram(body.content);
+  const { errors: contentErrors, warnings } = validateProgram(body.content);
   errors.push(...contentErrors);
   if (errors.length > 0) {
     return Response.json({ error: "Invalid program", details: errors }, { status: 422 });
@@ -52,7 +52,7 @@ export async function onRequestPost(context) {
       content: body.content,
       changeSummary: body.changeSummary ?? null,
     });
-    return Response.json({ ok: true, ...result }, { status: 201 });
+    return Response.json({ ok: true, ...result, warnings }, { status: 201 });
   } catch (e) {
     return Response.json({ error: "Could not add program version" }, { status: 500 });
   }

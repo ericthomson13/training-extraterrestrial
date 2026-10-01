@@ -18,6 +18,7 @@ No dependencies required to run -- stdlib only, `jsonschema` is optional.
 import json
 import re
 import sys
+from datetime import datetime
 
 # testDefinitions/warmupTemplates/sessionTemplates keys become DOM element ids
 # and data-attribute values in the app (see public/app.js's `s.id`,
@@ -196,6 +197,26 @@ def reference_checks(program):
     return errors
 
 
+# Not an error -- a program can legitimately be authored well ahead of time,
+# or uploaded a few days after training actually started (see PLANNING.md:
+# this is exactly the mismatch that caused a real user's "next up" week to
+# compute wrong). Just a nudge to double-check before it causes a
+# days-later, hard-to-spot bucketing bug. Kept in sync by hand with
+# functions/_lib/programValidator.js's UNUSUAL_START_DATE_DAYS.
+UNUSUAL_START_DATE_DAYS = 21
+
+
+def check_warnings(program):
+    warnings = []
+    start_date = program.get("startDate")
+    if isinstance(start_date, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", start_date):
+        diff_days = (datetime.strptime(start_date, "%Y-%m-%d") - datetime.now()).days
+        if abs(diff_days) > UNUSUAL_START_DATE_DAYS:
+            when = "in the past" if diff_days < 0 else "in the future"
+            warnings.append(f"startDate ({start_date}) is {abs(diff_days)} days {when} from today -- double check this matches when training actually starts")
+    return warnings
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -214,12 +235,19 @@ def main():
         sys.exit(1)
 
     errors = schema_check(program, schema_path) + reference_checks(program)
+    warnings = check_warnings(program)
 
     if errors:
         print(f"✘ {len(errors)} problem(s) found in {program_path}:\n")
         for e in errors:
             print(f"  - {e}")
         sys.exit(1)
+
+    if warnings:
+        print(f"⚠ {len(warnings)} warning(s) -- not blocking, but worth a second look:\n")
+        for w in warnings:
+            print(f"  - {w}")
+        print()
 
     print(f"✔ {program_path} looks valid.")
 

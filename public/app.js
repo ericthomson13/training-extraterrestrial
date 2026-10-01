@@ -302,7 +302,7 @@ async function resolveProgram() {
   function toast(msg, opts = {}) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
     t.classList.toggle("pr", !!opts.pr);
-    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.pr ? 4200 : 2600);
+    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.pr || opts.long ? 4200 : 2600);
   }
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -1018,8 +1018,13 @@ async function resolveProgram() {
           errBox.style.whiteSpace = "pre-line";
           return;
         }
-        toast("Update saved — reloading…");
-        setTimeout(() => location.reload(), 600);
+        if (body.warnings && body.warnings.length) {
+          toast(`Update saved. Heads up: ${body.warnings.join(" ")}`, { long: true });
+          setTimeout(() => location.reload(), 4000);
+        } else {
+          toast("Update saved — reloading…");
+          setTimeout(() => location.reload(), 600);
+        }
       } catch (e) {
         errBox.hidden = false; errBox.textContent = "Network error — check your connection and try again.";
       } finally {
@@ -1139,7 +1144,11 @@ async function resolveProgram() {
           errBox.style.whiteSpace = "pre-line";
           return;
         }
-        toast("Draft created. Activate it above when you're ready.");
+        if (body.warnings && body.warnings.length) {
+          toast(`Draft created. Heads up: ${body.warnings.join(" ")}`, { long: true });
+        } else {
+          toast("Draft created. Activate it above when you're ready.");
+        }
         $("#progName").value = ""; $("#progSport").value = ""; $("#progPaste").value = ""; $("#progFile").value = "";
         loadProgramList($("#progListBody"));
       } catch (e) {

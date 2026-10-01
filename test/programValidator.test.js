@@ -19,6 +19,38 @@ function base() {
   };
 }
 
+function isoDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+describe("validateProgram: warnings (non-blocking)", () => {
+  it("does not warn when startDate is close to today", () => {
+    const p = base();
+    p.startDate = isoDaysFromNow(5);
+    const result = validateProgram(p);
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("warns, but still validates, when startDate is far in the future", () => {
+    const p = base();
+    p.startDate = isoDaysFromNow(90);
+    const result = validateProgram(p);
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((w) => w.includes("startDate") && w.includes("in the future"))).toBe(true);
+  });
+
+  it("warns, but still validates, when startDate is far in the past", () => {
+    const p = base();
+    p.startDate = isoDaysFromNow(-90);
+    const result = validateProgram(p);
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((w) => w.includes("startDate") && w.includes("in the past"))).toBe(true);
+  });
+});
+
 describe("validateProgram: accepts real, known-good programs", () => {
   it("accepts the real transformed ski program", () => {
     const result = validateProgram(realContent);

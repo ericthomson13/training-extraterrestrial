@@ -59,8 +59,16 @@ function checkString(errors, path, value, maxLength, multiline) {
   if (!multiline && /[\r\n]/.test(value)) errors.push(`${path}: must not contain newlines`);
 }
 
+// Not an error -- a program can legitimately be authored well ahead of time,
+// or uploaded a few days after training actually started (see PLANNING.md:
+// this is exactly the mismatch that caused a real user's "next up" week to
+// compute wrong). Just a nudge to double-check before it causes a
+// days-later, hard-to-spot bucketing bug.
+const UNUSUAL_START_DATE_DAYS = 21;
+
 export function validateProgram(content) {
   const errors = [];
+  const warnings = [];
 
   // Size cap first -- an abuse guard, not a real constraint (a real season's
   // content is ~16.5KB).
@@ -81,7 +89,16 @@ export function validateProgram(content) {
   const required = ["startDate", "units", "periods", "testDefinitions", "videos", "circuits", "activation", "warmupTemplates", "sessionTemplates"];
   for (const key of required) if (!(key in content)) errors.push(`(root): missing required field '${key}'`);
   if (content.units !== undefined && content.units !== "lb" && content.units !== "kg") errors.push("units: must be 'lb' or 'kg'");
-  if (content.startDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(content.startDate)) errors.push("startDate: must be an ISO date (YYYY-MM-DD)");
+  if (content.startDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(content.startDate)) {
+    errors.push("startDate: must be an ISO date (YYYY-MM-DD)");
+  } else if (content.startDate) {
+    const diffDays = Math.round((new Date(`${content.startDate}T00:00:00`) - new Date()) / 86_400_000);
+    if (Math.abs(diffDays) > UNUSUAL_START_DATE_DAYS) {
+      warnings.push(
+        `startDate (${content.startDate}) is ${Math.abs(diffDays)} days ${diffDays < 0 ? "in the past" : "in the future"} from today -- double check this matches when training actually starts`,
+      );
+    }
+  }
   if (content.displayName !== undefined) checkString(errors, "displayName", content.displayName, 200, false);
   if (!Array.isArray(content.periods) || content.periods.length === 0) errors.push("periods: must be a non-empty array");
   if (!Array.isArray(content.testDefinitions)) errors.push("testDefinitions: must be an array");
@@ -290,5 +307,5 @@ export function validateProgram(content) {
     });
   });
 
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, warnings };
 }

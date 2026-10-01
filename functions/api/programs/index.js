@@ -37,7 +37,7 @@ export async function onRequestPost(context) {
   }
 
   const metaErrors = checkMeta(body);
-  const { errors: contentErrors } = validateProgram(body.content);
+  const { errors: contentErrors, warnings } = validateProgram(body.content);
   const errors = [...metaErrors, ...contentErrors];
   if (errors.length > 0) {
     return Response.json({ error: "Invalid program", details: errors }, { status: 422 });
@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
       sport: body.sport ?? null,
       content: body.content,
     });
-    return Response.json({ ok: true, ...result }, { status: 201 });
+    return Response.json({ ok: true, ...result, warnings }, { status: 201 });
   } catch (e) {
     return Response.json({ error: "Could not create program" }, { status: 500 });
   }

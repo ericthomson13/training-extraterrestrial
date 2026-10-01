@@ -222,7 +222,6 @@ async function resolveProgram() {
 
   /* ---------- UI state ---------- */
   let view = P ? "session" : "start";
-  let selWeek = currentWeek();
   let selKey = null;
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
   function loggedKeysInWeek(w) {
@@ -242,6 +241,24 @@ async function resolveProgram() {
     const done = loggedKeysInWeek(w);
     return sessionKeys(w).every(k => done.has(k));
   }
+  // Scans from the first numbered period forward for the first one that
+  // isn't fully logged yet, rather than trusting the calendar alone. If
+  // you're running ahead of or behind the calendar-implied week, this still
+  // lands on the real next thing to do -- the calendar-only version of this
+  // (just `currentWeek()`) is what let an already-finished week look like
+  // "today's workout" and get logged a second time by mistake.
+  function nextUpWeek() {
+    if (!P) return 1;
+    const numbered = P.periods.map(p => p.n);
+    for (const w of numbered) if (!isWeekHit(w)) return w;
+    // Only advance into the ongoing phase if the program actually has one --
+    // otherwise stay on the last numbered period rather than landing
+    // somewhere with no matching sessionTemplates (getSession would return
+    // null and crash the render).
+    const hasOngoing = P.ongoingPeriod || P.sessionTemplates.some(t => t.scope?.type === "ongoing");
+    return hasOngoing ? "S" : numbered[numbered.length - 1];
+  }
+  let selWeek = nextUpWeek();
   function weekStatus(w) {
     const cw = currentWeek();
     if (w === "S") return cw === "S" ? "current" : "upcoming";
@@ -249,10 +266,35 @@ async function resolveProgram() {
     return w === cw ? "current" : "upcoming";
   }
   const draftKey = id => "ssl:draft:" + id;
+  const emptyDraft = s => ({ items: s.items.map(it => ({ sets: Array.from({ length: it.sets }, () => ({ done: false, load: "", reps: "", rpe: "" })), note: "" })), bw: "", sore: null, notes: "" });
+  // Reconstructs a draft-shaped object from an already-saved log entry --
+  // every saved set renders as done (save-time already folded "filled in but
+  // never tapped done" into "done" -- see saveSession's filter -- so that
+  // distinction isn't preserved to reconstruct here, nor does it need to be).
+  // Matches items by name, not index, since that's how the rest of the app
+  // already correlates logged history to the current program.
+  function draftFromLoggedEntry(s, entry) {
+    return {
+      bw: entry.bw || "", sore: entry.sore ?? null, notes: entry.notes || "",
+      items: s.items.map(it => {
+        const logged = entry.items.find(x => x.name === it.name);
+        const sets = (logged ? logged.sets : []).map(x => ({ done: true, load: x.load || "", reps: x.reps || "", rpe: x.rpe || "" }));
+        while (sets.length < it.sets) sets.push({ done: false, load: "", reps: "", rpe: "" });
+        return { sets, note: (logged && logged.note) || "" };
+      }),
+    };
+  }
+  // No in-progress draft (saveSession deletes it right after saving) doesn't
+  // mean "never done" -- if this exact session was already logged, show what
+  // was actually recorded instead of a blank form that looks identical to a
+  // fresh day. This is what let an already-finished session get logged a
+  // second time by mistake: there was no visible difference from a new one.
   function getDraft(s) {
     const d = store.get(draftKey(s.id), null);
     if (d) return d;
-    return { items: s.items.map(it => ({ sets: Array.from({ length: it.sets }, () => ({ done: false, load: "", reps: "", rpe: "" })), note: "" })), bw: "", sore: null, notes: "" };
+    const priorEntries = getLog().filter(e => e.sessionId === s.id);
+    if (priorEntries.length) return draftFromLoggedEntry(s, priorEntries[priorEntries.length - 1]);
+    return emptyDraft(s);
   }
   let saveTimer = null;
   function saveDraft(s, d) { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set(draftKey(s.id), d), 250); }
@@ -274,6 +316,7 @@ async function resolveProgram() {
     s.items.forEach((it, i) => { while (d.items[i].sets.length < it.sets) d.items[i].sets.push({ done: false, load: "", reps: "", rpe: "" }); });
 
     const logged = loggedIds();
+    const priorEntries = getLog().filter(e => e.sessionId === s.id);
     $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
     const warmupTpl = s.warmupTemplate ? P.warmupTemplates.find(t => t.key === s.warmupTemplate) : null;
     const noSpikes = s.noWarmupSpikes;
@@ -304,6 +347,7 @@ async function resolveProgram() {
       <div class="head">
         <div class="eyebrow">${esc(weekLabel(selWeek))} · ${esc(weekDates(selWeek))} · ${esc(PHASE(selWeek))}</div>
         <h1>${esc(s.title)}</h1>
+        ${priorEntries.length ? `<p class="note-muted">✓ Already logged${priorEntries.length > 1 ? ` ${priorEntries.length} times, most recently` : ""} on ${esc(fmt(parseISO(priorEntries[priorEntries.length - 1].date)))}. Saving again adds another entry — it won't overwrite.</p>` : ""}
         <div class="progress" id="prog"></div>
       </div>
       ${warmupTpl ? `
@@ -437,6 +481,7 @@ async function resolveProgram() {
         </div>
         <div class="row-actions">
           <button type="button" class="link-btn" data-act="add">+ Set</button>
+          <button type="button" class="link-btn" data-act="remove"${di.sets.length <= 1 ? " disabled" : ""}>− Set</button>
           <button type="button" class="link-btn" data-act="note">${di.note ? "Edit note" : "+ Note"}</button>
         </div>
         <textarea data-f="note" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>
@@ -510,6 +555,11 @@ async function resolveProgram() {
       di.sets.push({ done: false, load: "", reps: "", rpe: "" }); store.set(draftKey(s.id), d);
       el.replaceWith(renderItem(s, it, d, i, el.open)); updateProgress(s, d);
     };
+    el.querySelector('[data-act="remove"]').onclick = () => {
+      if (di.sets.length <= 1) return;
+      di.sets.pop(); store.set(draftKey(s.id), d);
+      el.replaceWith(renderItem(s, it, d, i, el.open)); updateProgress(s, d);
+    };
     el.querySelector('[data-act="next"]').onclick = () => {
       el.open = false;
       const next = el.nextElementSibling;
@@ -568,6 +618,7 @@ async function resolveProgram() {
           </div>
           <div class="row-actions">
             <button type="button" class="link-btn" data-act="add" data-i="${i}">+ Set</button>
+            <button type="button" class="link-btn" data-act="remove" data-i="${i}"${di.sets.length <= 1 ? " disabled" : ""}>− Set</button>
             <button type="button" class="link-btn" data-act="note" data-i="${i}">${di.note ? "Edit note" : "+ Note"}</button>
           </div>
           <textarea data-f="note" data-i="${i}" placeholder="How it felt, pain, form cues" ${di.note ? "" : "hidden"}>${esc(di.note)}</textarea>
@@ -659,6 +710,11 @@ async function resolveProgram() {
       sub.querySelector('[data-act="note"]').onclick = () => { ta.hidden = false; ta.focus(); };
       sub.querySelector('[data-act="add"]').onclick = () => {
         di.sets.push({ done: false, load: "", reps: "", rpe: "" }); store.set(draftKey(s.id), d);
+        el.replaceWith(renderItemGroup(s, items, indices, d, el.open)); updateProgress(s, d);
+      };
+      sub.querySelector('[data-act="remove"]').onclick = () => {
+        if (di.sets.length <= 1) return;
+        di.sets.pop(); store.set(draftKey(s.id), d);
         el.replaceWith(renderItemGroup(s, items, indices, d, el.open)); updateProgress(s, d);
       };
     });

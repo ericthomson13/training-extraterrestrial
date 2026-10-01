@@ -54,9 +54,15 @@
     flush();
   }
 
+  // Remote wins whenever an id exists on both sides -- the app has no "edit a
+  // past entry" flow (only create-new or delete), so once an id is on the
+  // server, local and remote only ever disagree because of a direct DB
+  // correction or a stale local cache, never a newer local edit worth
+  // keeping. A local-only id (not yet pushed, e.g. saved offline) is left
+  // alone since remote won't have it yet.
   function mergeSessions(local, remote) {
     const byId = new Map(local.map((e) => [e.id, e]));
-    remote.forEach((e) => { if (!byId.has(e.id)) byId.set(e.id, e); });
+    remote.forEach((e) => { byId.set(e.id, e); });
     return Array.from(byId.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }
 

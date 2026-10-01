@@ -34,3 +34,30 @@ jobs:
 
       - name: Unit + integration tests (vitest)
         run: npm test -- --run
+
+      # --- Playwright e2e -- commented out, not removed, to re-enable later
+      # (e.g. nightly schedule, workflow_dispatch, or once budget allows
+      # running it on every push) without re-deriving these steps:
+      #
+      # # Local-dev auth stand-in only (see functions/api/_middleware.js) --
+      # # never a real secret, Access verification is never reached in CI.
+      # - name: Write .dev.vars for local dev auth
+      #   run: |
+      #     cat > .dev.vars <<'EOF'
+      #     ENVIRONMENT=development
+      #     DEV_USER_EMAIL=ci@example.test
+      #     EOF
+      #
+      # - name: Install Playwright's browser
+      #   run: npx playwright install --with-deps chromium
+      #
+      # - name: End-to-end tests (Playwright)
+      #   run: npm run test:e2e
+      #
+      # - name: Upload Playwright report on failure
+      #   if: failure()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: playwright-report
+      #     path: playwright-report/
+      #     retention-days: 7

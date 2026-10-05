@@ -4,10 +4,9 @@
 import { test, expect } from "./fixtures.js";
 import { createAndActivateProgram, isoDaysAgo, minimalProgram } from "./helpers.js";
 
-// startDate must be "today" (not a fixed literal) so a session logged during
-// the test actually falls inside period 1's real date range -- isWeekHit()
-// matches a logged entry to a period by its real calendar date, same as the
-// live app does for a real user.
+// startDate = today so week 1 is "current" by calendar; what counts as
+// "logged in week w" is the entry's own stored `week` field, not a
+// recomputed date-range match (see loggedKeysInWeek in app.js).
 function twoWeekProgram() {
   return minimalProgram({
     startDate: isoDaysAgo(0),
@@ -18,6 +17,24 @@ function twoWeekProgram() {
     sessionTemplates: [
       { key: "A", title: "Day A", scope: { type: "period", n: 1 }, items: [{ name: "Back squat", rx: "3×5" }] },
       { key: "A", title: "Day A", scope: { type: "period", n: 2 }, items: [{ name: "Back squat", rx: "3×5" }] },
+    ],
+  });
+}
+
+// Three sessions in period 2, for testing out-of-order completion within a
+// single week.
+function threeSessionWeek2Program() {
+  return minimalProgram({
+    startDate: isoDaysAgo(0),
+    periods: [
+      { n: 1, phase: "Intro", lengthDays: 7 },
+      { n: 2, phase: "Build", lengthDays: 7 },
+    ],
+    sessionTemplates: [
+      { key: "W1", title: "Week 1 day", scope: { type: "period", n: 1 }, items: [{ name: "Back squat", rx: "3×5" }] },
+      { key: "A", title: "Day A", scope: { type: "period", n: 2 }, items: [{ name: "Back squat", rx: "3×5" }] },
+      { key: "B", title: "Day B", scope: { type: "period", n: 2 }, items: [{ name: "Bench press", rx: "3×5" }] },
+      { key: "C", title: "Day C", scope: { type: "period", n: 2 }, items: [{ name: "Deadlift", rx: "3×5" }] },
     ],
   });
 }
@@ -83,6 +100,28 @@ test("revisiting an already-logged session shows what was recorded and a banner,
   await openExercise(page);
   await expect(page.locator("#l-w1-A-0-0")).toHaveValue("185");
   await expect(page.locator("#r-w1-A-0-0")).toHaveValue("5");
+});
+
+test("sessions logged out of order within a week still correctly resolve to the next incomplete one", async ({ page, request, userEmail }) => {
+  // Real incident: logging week 2's "B" a few days before week 2 "officially"
+  // starts by the calendar, then "A" on time -- the old date-range-based
+  // completion check didn't count the early "B" as done for week 2 (its date
+  // fell in week 1's window), so it kept reappearing as "next up" instead of
+  // advancing to "C".
+  await createAndActivateProgram(request, userEmail, { content: threeSessionWeek2Program() });
+  const today = isoDaysAgo(0);
+  await request.post("/api/sessions", {
+    headers: { "X-Test-User-Email": userEmail },
+    data: { id: "seed-b", date: today, sessionId: "w2-B", week: 2, key: "B", title: "Day B", bw: "", sore: null, notes: "", items: [] },
+  });
+  await request.post("/api/sessions", {
+    headers: { "X-Test-User-Email": userEmail },
+    data: { id: "seed-a", date: today, sessionId: "w2-A", week: 2, key: "A", title: "Day A", bw: "", sore: null, notes: "", items: [] },
+  });
+
+  await page.goto("/");
+  await page.locator('.chip[data-week="2"]').click();
+  await expect(page.locator('.seg[aria-pressed="true"]')).toHaveText(/C/);
 });
 
 test("the remove-set button undoes an accidental add, and can't go below one set", async ({ page, request, userEmail }) => {

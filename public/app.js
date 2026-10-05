@@ -224,11 +224,16 @@ async function resolveProgram() {
   let view = P ? "session" : "start";
   let selKey = null;
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
+  // Matches by the week the entry was actually logged under (stored directly
+  // on the entry at save time -- see saveSession's `week: s.week`), not by
+  // comparing the entry's calendar date against a recomputed period date
+  // window. Those two can disagree whenever a session is logged ahead of or
+  // behind the calendar-implied week (e.g. doing "week 2" a few days before
+  // the calendar considers week 2 to have started) -- which is exactly what
+  // caused a real already-completed session to keep showing as "next up"
+  // because its date fell in the wrong period's window.
   function loggedKeysInWeek(w) {
-    if (w === "S") return new Set();
-    const s = periodStart(P, w);
-    const end = periodEnd(P, w); end.setDate(end.getDate() + 1);
-    return new Set(getLog().filter(e => { const d = parseISO(e.date); return d >= s && d < end; }).map(e => e.key));
+    return new Set(getLog().filter(e => e.week === w).map(e => e.key));
   }
   function defaultKey(w) {
     const done = loggedKeysInWeek(w);
@@ -305,6 +310,19 @@ async function resolveProgram() {
     clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.pr || opts.long ? 4200 : 2600);
   }
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // Native scrollIntoView({block:"start"}) aligns an element's top with the
+  // viewport's top -- but `.top` is position:sticky, so that lands the next
+  // card's title/video-link UNDER the sticky header rather than below it,
+  // especially right after scrolling with the on-screen keyboard open.
+  // Measuring the header's real rendered height (safe-area-inset, font
+  // scaling) instead of guessing a fixed offset in CSS.
+  function scrollCardIntoView(el) {
+    const header = $(".top");
+    const offset = (header ? header.offsetHeight : 0) + 8;
+    const y = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  }
 
   /* ---------- render: session ---------- */
   function renderSession() {
@@ -385,7 +403,7 @@ async function resolveProgram() {
     if (warmDone) warmDone.onclick = () => {
       $("#warm").open = false;
       const first = wrap.firstElementChild;
-      if (first) { first.open = true; first.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      if (first) { first.open = true; scrollCardIntoView(first); }
     };
 
     app.querySelectorAll("[data-week]").forEach(b => b.onclick = () => { selWeek = b.dataset.week === "S" ? "S" : +b.dataset.week; selKey = null; render(); window.scrollTo(0, 0); });
@@ -563,7 +581,7 @@ async function resolveProgram() {
     el.querySelector('[data-act="next"]').onclick = () => {
       el.open = false;
       const next = el.nextElementSibling;
-      if (next && next.tagName === "DETAILS") { next.open = true; next.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      if (next && next.tagName === "DETAILS") { next.open = true; scrollCardIntoView(next); }
     };
     return el;
   }
@@ -722,7 +740,7 @@ async function resolveProgram() {
     el.querySelector('[data-act="next"]').onclick = () => {
       el.open = false;
       const next = el.nextElementSibling;
-      if (next && next.tagName === "DETAILS") { next.open = true; next.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      if (next && next.tagName === "DETAILS") { next.open = true; scrollCardIntoView(next); }
     };
 
     return el;

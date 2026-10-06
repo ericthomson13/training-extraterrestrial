@@ -26,6 +26,13 @@ server itself (`npm run d1:migrate:local && wrangler pages dev`), so you don't
 need one already running — though if you do (`npm run dev`), Playwright
 reuses it instead of starting a second one.
 
+## Service workers are blocked
+
+`fixtures.js` creates contexts with `serviceWorkers: "block"`. Once `public/sw.js`
+controls a page, its fetches bypass `page.route()` and it silently falls back to
+cached `/api` responses on failure, which makes tests that delay or fail
+requests (e.g. `entry-edit.spec.js`) nondeterministic.
+
 ## Synthetic users
 
 Every test gets its own throwaway identity — `pw-<uuid>@example.test` — via

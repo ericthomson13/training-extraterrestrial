@@ -16,9 +16,11 @@ export const test = base.extend({
     await use(freshUserEmail());
   },
   // Overrides the built-in `page` fixture so every page load from it carries
-  // this test's synthetic identity.
+  // this test's synthetic identity. Service workers are blocked: once public/sw.js
+  // controls a page its fetches bypass page.route() (and it falls back to cached
+  // API responses on failure), which makes network-shaping tests nondeterministic.
   page: async ({ browser, userEmail }, use) => {
-    const context = await browser.newContext({ extraHTTPHeaders: { "X-Test-User-Email": userEmail } });
+    const context = await browser.newContext({ extraHTTPHeaders: { "X-Test-User-Email": userEmail }, serviceWorkers: "block" });
     const page = await context.newPage();
     await use(page);
     await context.close();
@@ -29,7 +31,7 @@ export const test = base.extend({
     await use(freshUserEmail());
   },
   otherPage: async ({ browser, otherUserEmail }, use) => {
-    const context = await browser.newContext({ extraHTTPHeaders: { "X-Test-User-Email": otherUserEmail } });
+    const context = await browser.newContext({ extraHTTPHeaders: { "X-Test-User-Email": otherUserEmail }, serviceWorkers: "block" });
     const page = await context.newPage();
     await use(page);
     await context.close();

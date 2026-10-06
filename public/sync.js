@@ -11,10 +11,27 @@
 
   let statusEl = null;
   function setStatus(text) { if (statusEl) statusEl.textContent = text; }
+  // While a pull is in flight the UI locks its save buttons (see
+  // applySyncLock in app.js) and the status chip spins, so nothing can be
+  // edited against a snapshot that's about to be merged over it.
+  // Sticky failure flag (data-sync-error on <html>): set when a push or pull
+  // fails, cleared when one fully succeeds. app.js uses it to relabel the save
+  // buttons so it's clear the change is only on this device for now.
+  function setError(on) {
+    if (document.documentElement.hasAttribute("data-sync-error") === on) return;
+    document.documentElement.toggleAttribute("data-sync-error", on);
+    window.dispatchEvent(new Event("ssl:sync-state"));
+  }
+  function setSyncing(on) {
+    document.documentElement.toggleAttribute("data-syncing", on);
+    if (statusEl) statusEl.toggleAttribute("data-busy", on);
+    if (on) setStatus("Syncing…");
+    window.dispatchEvent(new Event("ssl:sync-state"));
+  }
 
   async function send(op) {
     if (op.type === "upsertSession") {
-      const res = await fetch("/api/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op.entry) });
+      const res = await fetch("/api/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op.entry), signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw Object.assign(new Error("upsertSession failed"), { status: res.status });
     } else if (op.type === "deleteSession") {
       const res = await fetch("/api/sessions/" + encodeURIComponent(op.id), { method: "DELETE" });
@@ -25,44 +42,55 @@
     }
   }
 
-  let flushing = false;
-  async function flush() {
-    if (flushing) return;
-    flushing = true;
-    try {
-      let q = get(QUEUE, []);
-      while (q.length) {
-        try {
-          await send(q[0]);
-        } catch (e) {
-          setStatus(e.status === 401 ? "Signed out" : navigator.onLine ? "Sync error — retrying" : "Offline — queued");
-          return; // keep order; retry on next flush() call
-        }
-        q = q.slice(1);
-        set(QUEUE, q);
+  // flush() hands back the in-flight run so callers (pull) can wait for it.
+  let flushing = null;
+  function flush() {
+    if (!flushing) flushing = Promise.resolve().then(runFlush).finally(() => { flushing = null; });
+    return flushing;
+  }
+  async function runFlush() {
+    // Re-read the queue each pass: queue() may append while a send is in flight.
+    for (let q = get(QUEUE, []); q.length; q = get(QUEUE, [])) {
+      try {
+        await send(q[0]);
+      } catch (e) {
+        setStatus(e.status === 401 ? "Signed out" : navigator.onLine ? "Sync error — retrying" : "Offline — queued");
+        setError(true);
+        return; // keep order; retry on next flush() call
       }
-      if (!q.length) setStatus("Synced");
-    } finally {
-      flushing = false;
+      set(QUEUE, get(QUEUE, []).slice(1));
     }
+    setStatus("Synced");
+    setError(false);
   }
 
+  // Bumped on every local mutation so an in-flight pull can tell its server
+  // snapshot predates a local edit/delete and must not be merged.
+  let localVersion = 0;
   function queue(op) {
+    localVersion++;
     const q = get(QUEUE, []);
     q.push(op);
     set(QUEUE, q);
     flush();
   }
 
-  // Remote wins whenever an id exists on both sides -- the app has no "edit a
-  // past entry" flow (only create-new or delete), so once an id is on the
-  // server, local and remote only ever disagree because of a direct DB
+  // Remote wins whenever an id exists on both sides, except for ids with a
+  // still-queued local change (see `pending` below). Otherwise local and
+  // remote only disagree because of a direct DB
   // correction or a stale local cache, never a newer local edit worth
   // keeping. A local-only id (not yet pushed, e.g. saved offline) is left
   // alone since remote won't have it yet.
   function mergeSessions(local, remote) {
     const byId = new Map(local.map((e) => [e.id, e]));
-    remote.forEach((e) => { byId.set(e.id, e); });
+    // Local changes not yet on the server beat the (stale) remote copy: an
+    // unsent edit keeps the local entry, an unsent delete stays deleted.
+    const pending = new Map();
+    get(QUEUE, []).forEach((op) => {
+      if (op.type === "upsertSession") pending.set(op.entry.id, "upsert");
+      else if (op.type === "deleteSession") pending.set(op.id, "delete");
+    });
+    remote.forEach((e) => { if (!pending.has(e.id)) byId.set(e.id, e); });
     return Array.from(byId.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }
 
@@ -76,19 +104,41 @@
     return Array.from(byDate.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
   }
 
-  async function pull() {
+  let pulling = null;
+  function pull() {
+    if (!pulling) pulling = Promise.resolve().then(() => runPull()).finally(() => { pulling = null; });
+    return pulling;
+  }
+  async function runPull(attempt = 0) {
+    let retrying = false;
+    setSyncing(true);
     try {
-      const [sRes, tRes] = await Promise.all([fetch("/api/sessions"), fetch("/api/tests")]);
-      if (sRes.status === 401 || tRes.status === 401) { setStatus("Signed out"); return; }
-      if (!sRes.ok || !tRes.ok) { setStatus("Sync error"); return; }
+      // Push unsent local changes first so the snapshot we fetch includes them.
+      await flush();
+      setStatus("Syncing…");
+      const startVersion = localVersion;
+      const [sRes, tRes] = await Promise.all([fetch("/api/sessions", { signal: AbortSignal.timeout(15000) }), fetch("/api/tests", { signal: AbortSignal.timeout(15000) })]);
+      if (sRes.status === 401 || tRes.status === 401) { setStatus("Signed out"); setError(true); return; }
+      if (!sRes.ok || !tRes.ok) { setStatus("Sync error"); setError(true); return; }
       const { sessions } = await sRes.json();
       const { tests } = await tRes.json();
+      if (localVersion !== startVersion) {
+        // Edited/deleted while the request was in flight: snapshot is stale.
+        if (attempt < 2) { retrying = true; return runPull(attempt + 1); }
+        setStatus("Will retry sync");
+        return;
+      }
       set(LOG, mergeSessions(get(LOG, []), sessions));
       set(TESTS, mergeTests(get(TESTS, []), tests));
       setStatus("Synced");
+      if (!get(QUEUE, []).length) setError(false);
       window.dispatchEvent(new Event("ssl:data-updated"));
     } catch (e) {
       setStatus(navigator.onLine ? "Sync error" : "Offline");
+      setError(true);
+    } finally {
+      // a retry (stale snapshot) re-enters runPull, which re-locks
+      if (!retrying) setSyncing(false);
     }
   }
 
@@ -119,7 +169,8 @@
   };
 
   statusEl = document.getElementById("syncStatus");
-  migrateLocalIfNeeded().then(() => { flush(); pull(); });
+  // `ready` resolves once startup's one-time migration + first pull are done.
+  window.SYNC.ready = migrateLocalIfNeeded().then(() => { flush(); return pull(); });
   window.addEventListener("online", () => { flush(); pull(); });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { flush(); pull(); } });
 })();

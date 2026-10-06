@@ -1,5 +1,5 @@
 /* Offline cache. Network first (2.5 s) so program updates arrive; cached copy when the gym has no signal. */
-const CACHE = "ssl-v2"; // bumped: precache list gained programEngine.js/legacyProgramAdapter.js (Phase B)
+const CACHE = "ssl-v3"; // bumped: edit-entry flow + sync race fixes
 const FILES = ["./", "index.html", "app.js", "program.js", "programEngine.js", "legacyProgramAdapter.js", "sync.js", "manifest.webmanifest", "favicon.svg", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

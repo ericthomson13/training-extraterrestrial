@@ -51,6 +51,10 @@ button{cursor:pointer}
 .brand{font:700 22px/1 var(--display);letter-spacing:.02em;text-transform:uppercase}
 .brand small{display:block;font:500 11px/1.2 var(--body);letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-top:2px}
 .sync-status{font-size:11px;color:var(--muted);margin-right:8px;white-space:nowrap}
+.sync-status[data-busy]::before{content:"";display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%}
+@media (prefers-reduced-motion:no-preference){.sync-status[data-busy]::before{animation:sync-spin .8s linear infinite}}
+@keyframes sync-spin{to{transform:rotate(360deg)}}
+button:disabled.primary{opacity:.5}
 
 /* Theme picker: a custom listbox, not a native <select> — native dropdown
    chrome is OS-rendered and ignores our styling (worst on Safari/macOS). */

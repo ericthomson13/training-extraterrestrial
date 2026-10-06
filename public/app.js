@@ -224,6 +224,8 @@ async function resolveProgram() {
   let view = P ? "session" : "start";
   let selKey = null;
   const loggedIds = () => new Set(getLog().map(e => e.sessionId));
+  // How many times each session has been saved (a repeat is a separate entry).
+  const loggedCounts = () => getLog().reduce((m, e) => m.set(e.sessionId, (m.get(e.sessionId) || 0) + 1), new Map());
   // Matches by the week the entry was actually logged under (stored directly
   // on the entry at save time -- see saveSession's `week: s.week`), not by
   // comparing the entry's calendar date against a recomputed period date
@@ -334,6 +336,7 @@ async function resolveProgram() {
     s.items.forEach((it, i) => { while (d.items[i].sets.length < it.sets) d.items[i].sets.push({ done: false, load: "", reps: "", rpe: "" }); });
 
     const logged = loggedIds();
+    const counts = loggedCounts();
     const priorEntries = getLog().filter(e => e.sessionId === s.id);
     $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
     const warmupTpl = s.warmupTemplate ? P.warmupTemplates.find(t => t.key === s.warmupTemplate) : null;
@@ -359,7 +362,7 @@ async function resolveProgram() {
       <div class="sessions" role="group" aria-label="Session">
         ${sessionKeys(selWeek).map(k => {
           const label = (getSession(selWeek, k) || {}).shortLabel || k;
-          return `<button type="button" class="seg" data-key="${k}" aria-pressed="${k === selKey}">${esc(label)}${logged.has(`w${selWeek}-${k}`) ? '<span class="tick" aria-label="logged">●</span>' : ""}</button>`;
+          return `<button type="button" class="seg" data-key="${k}" aria-pressed="${k === selKey}">${esc(label)}${logged.has(`w${selWeek}-${k}`) ? (n => `<span class="tick" aria-label="logged${n > 1 ? ` ${n} times` : ""}">●${n > 1 ? n : ""}</span>`)(counts.get(`w${selWeek}-${k}`)) : ""}</button>`;
         }).join("")}
       </div>
       <div class="head">
@@ -390,6 +393,7 @@ async function resolveProgram() {
         <label class="lab" for="snotes" style="margin-top:12px">Session notes</label>
         <textarea id="snotes" placeholder="Sleep, energy, anything that felt off or great">${esc(d.notes)}</textarea>
         <button type="button" class="primary" id="saveBtn">Save to log</button>
+        <button type="button" class="link-btn" id="retrySync" hidden>Sync failed — retry now</button>
         <div class="btns"><button type="button" class="secondary" id="clearBtn">Clear this session</button></div>
       </section>`;
 
@@ -414,7 +418,17 @@ async function resolveProgram() {
       d.sore = +b.dataset.s; saveDraft(s, d);
       $("#sore").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
     });
-    $("#saveBtn").onclick = () => saveSession(s, d);
+    const saveBtn = $("#saveBtn");
+    $("#retrySync").onclick = () => { if (window.SYNC) window.SYNC.pull(); };
+    saveBtn.onclick = () => {
+      const prior = getLog().filter(e => e.sessionId === s.id);
+      if (prior.length && !saveBtn.dataset.armed) {
+        saveBtn.dataset.armed = "1";
+        saveBtn.textContent = `Already logged ${fmt(parseISO(prior[prior.length - 1].date))}. Tap again to save a repeat`;
+        return;
+      }
+      saveSession(s, d);
+    };
     const clr = $("#clearBtn");
     clr.onclick = () => {
       if (clr.dataset.armed) { store.del(draftKey(s.id)); toast("Cleared"); render(); return; }
@@ -944,9 +958,32 @@ async function resolveProgram() {
           ${e.items.filter(it => it.sets.length || it.note).map(it => `<p><span class="x">${esc(it.name)}</span><br><span class="v">${esc(it.sets.map(x => [x.load, x.reps && x.reps + (it.u || "")].filter(Boolean).join("×") + (x.rpe ? "@" + x.rpe : "")).join(", "))}</span>${it.note ? `<br><i>${esc(it.note)}</i>` : ""}</p>`).join("")}
           ${e.notes ? `<p><i>${esc(e.notes)}</i></p>` : ""}
           <p class="progress">${[e.bw && "BW " + e.bw, e.sore != null && "Soreness " + e.sore + "/5"].filter(Boolean).join(" · ")}</p>
+          <div class="editbox" hidden>
+            <div class="grid2">
+              <div><label class="lab">Body weight</label><div class="field"><input class="e-bw" inputmode="decimal" value="${esc(e.bw || "")}"><span>${UNIT}</span></div></div>
+              <div><label class="lab">Soreness</label><div class="soreness e-sore">${[0, 1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-pressed="${e.sore === n}">${n}</button>`).join("")}</div></div>
+            </div>
+            <label class="lab" style="margin-top:12px">Notes</label>
+            <textarea class="e-notes">${esc(e.notes || "")}</textarea>
+            <button type="button" class="primary e-save">Save changes</button>
+          </div>
+          <button type="button" class="link-btn" data-edit>Edit weight, soreness &amp; notes</button>
           <button type="button" class="link-btn danger" data-del="${esc(e.id)}">Delete entry</button>
         </div>`;
       box.appendChild(det);
+      const editBox = det.querySelector(".editbox"), editBtn = det.querySelector("[data-edit]");
+      let sore = e.sore ?? null;
+      editBtn.onclick = () => { editBox.hidden = !editBox.hidden; };
+      det.querySelectorAll(".e-sore button").forEach(b => b.onclick = () => {
+        sore = +b.dataset.s;
+        det.querySelectorAll(".e-sore button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      });
+      det.querySelector(".e-save").onclick = () => {
+        const updated = { ...e, bw: det.querySelector(".e-bw").value.trim(), sore, notes: det.querySelector(".e-notes").value };
+        if (!store.set(LOG, getLog().map(x => x.id === e.id ? updated : x))) { toast("Couldn't save: this browser is blocking storage"); return; }
+        if (window.SYNC) window.SYNC.queueUpsertSession(updated);
+        toast("Entry updated"); render();
+      };
     });
     box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
       if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Tap again to delete"; return; }
@@ -1186,7 +1223,26 @@ async function resolveProgram() {
     else if (view === "tests") renderTests();
     else if (view === "progress") renderProgress();
     else renderStart();
+    applySyncLock();
   }
+  // Disable the save buttons while a sync pull is merging, so an edit can't
+  // race the snapshot being applied. Re-applied after every render too.
+  function applySyncLock() {
+    const root = document.documentElement;
+    const locked = root.hasAttribute("data-syncing"), failing = root.hasAttribute("data-sync-error");
+    app.querySelectorAll("#saveBtn, .e-save").forEach(b => {
+      b.disabled = locked;
+      // A sync failure doesn't lose the save (it's kept on this device and
+      // re-sent automatically), but say so on the button. The duplicate-save
+      // prompt keeps priority over this label.
+      if (b.dataset.armed) return;
+      const base = b.dataset.base || (b.dataset.base = b.textContent);
+      b.textContent = failing ? `${base} · sync failing, will retry` : base;
+    });
+    const retry = $("#retrySync");
+    if (retry) retry.hidden = !failing;
+  }
+  window.addEventListener("ssl:sync-state", applySyncLock);
   document.querySelectorAll(".nav button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); window.scrollTo(0, 0); });
   // a background sync pull merged in data from another device; re-render
   // unless we're mid-session (a live re-render there would drop focus/typing)

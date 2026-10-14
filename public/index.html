@@ -16,7 +16,7 @@
 :root{
   --ground:#EEF2F4; --surface:#FFFFFF; --sunk:#F5F8F9; --ink:#15212B; --muted:#5B6B78;
   --line:#D5DDE3; --accent:#1D5FD1; --accent-ink:#FFFFFF; --accent-soft:#E3ECFB;
-  --ok:#23804F; --ok-soft:#E1F2E8; --warn:#B4541A; --warn-soft:#FBE6D8;
+  --ok:#23804F; --ok-soft:#E1F2E8; --warn:#B4541A; --warn-soft:#FBE6D8; --err:#B3261E; --err-soft:#FCE8E6; --err-ink:#7A1510;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
@@ -26,13 +26,13 @@
   :root:not([data-theme="light"]){
     --ground:#0D141A; --surface:#15202A; --sunk:#111A22; --ink:#E6EDF2; --muted:#93A3B0;
     --line:#26343F; --accent:#6EA2FF; --accent-ink:#0D141A; --accent-soft:#1B2C45;
-    --ok:#5CC98D; --ok-soft:#173226; --warn:#F09A5E; --warn-soft:#3A2416; color-scheme:dark;
+    --ok:#5CC98D; --ok-soft:#173226; --warn:#F09A5E; --warn-soft:#3A2416; --err:#FF8A80; --err-soft:#3B1A18; --err-ink:#FFD4CF; color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --ground:#0D141A; --surface:#15202A; --sunk:#111A22; --ink:#E6EDF2; --muted:#93A3B0;
   --line:#26343F; --accent:#6EA2FF; --accent-ink:#0D141A; --accent-soft:#1B2C45;
-  --ok:#5CC98D; --ok-soft:#173226; --warn:#F09A5E; --warn-soft:#3A2416; color-scheme:dark;
+  --ok:#5CC98D; --ok-soft:#173226; --warn:#F09A5E; --warn-soft:#3A2416; --err:#FF8A80; --err-soft:#3B1A18; --err-ink:#FFD4CF; color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -189,6 +189,8 @@ label.lab{display:block;font-size:12px;letter-spacing:.06em;text-transform:upper
 .spark-dot{fill:var(--accent)}
 .spark-label{font:500 11px var(--mono);fill:var(--muted)}
 .toast.pr{background:var(--ok);color:var(--surface)}
+.toast.err{background:var(--err);color:var(--surface);font-weight:600}
+.error-box{margin-top:12px;padding:10px 12px;border:1px solid var(--err);border-left-width:4px;border-radius:8px;background:var(--err-soft);color:var(--err-ink);font-size:14px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
 .tbl-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 table.tests{border-collapse:collapse;width:100%;font-size:14px}
 table.tests th,table.tests td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}

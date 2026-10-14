@@ -61,3 +61,30 @@ test("a malicious payload is rejected server-side with specific errors, no draft
   await expect(errors).toContainText("short identifier");
   await expect(page.getByText("No programs yet")).toBeVisible();
 });
+
+test("upload errors are visually flagged: red banner (role=alert) plus a red toast", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("summary", { hasText: "Upload a program" }).click();
+  await page.locator("#progName").fill("Bad upload");
+  await page.locator("#progPaste").fill(JSON.stringify(minimalProgram({ units: "stone" })));
+  await page.locator("#progUpload").click();
+
+  const box = page.locator("#uploadErrors");
+  await expect(box).toBeVisible();
+  await expect(box).toHaveAttribute("role", "alert");
+  await expect(box).toContainText("units");
+  // red-hued border + tinted background, not the default muted text style
+  const { border, bg } = await box.evaluate((el) => {
+    const c = getComputedStyle(el);
+    return { border: c.borderLeftColor, bg: c.backgroundColor };
+  });
+  const [r, g, b] = border.match(/\d+/g).map(Number);
+  expect(r).toBeGreaterThan(g + 60);
+  expect(r).toBeGreaterThan(b + 60);
+  expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+
+  const toast = page.locator("#toast");
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveClass(/err/);
+  await expect(toast).toContainText(/Validation failed: \d+ issue/);
+});

@@ -312,7 +312,17 @@ async function resolveProgram() {
   function toast(msg, opts = {}) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
     t.classList.toggle("pr", !!opts.pr);
-    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.pr || opts.long ? 4200 : 2600);
+    t.classList.toggle("err", !!opts.err);
+    clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, opts.err ? 5000 : opts.pr || opts.long ? 4200 : 2600);
+  }
+  // Red banner in the form + a red toast, so a failed upload/validation is
+  // noticed even when the banner is scrolled out of view. `summary` is the
+  // short toast text; `text` is the full message shown in the banner.
+  function showFormError(box, text, summary) {
+    box.hidden = false;
+    box.textContent = text;
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    toast(summary || text.split("\n")[0], { err: true });
   }
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -1038,7 +1048,7 @@ async function resolveProgram() {
       <textarea id="updPaste-${id}" placeholder='{"startDate": "2027-01-04", ...}'></textarea>
       <label class="lab" for="updSummary-${id}" style="margin-top:12px">What changed? (optional)</label>
       <div class="field"><input id="updSummary-${id}" placeholder="Adjusted weeks 5–8 based on how testing went"></div>
-      <p class="note-muted" id="updErrors-${id}" hidden></p>
+      <p class="error-box" id="updErrors-${id}" role="alert" hidden></p>
       <button type="button" class="primary" id="updSubmit-${id}">Validate + save update</button>
       <p class="note-muted">Periods that have already happened can't be changed by an update — only the parts still ahead.</p>
     </div>`;
@@ -1059,7 +1069,7 @@ async function resolveProgram() {
       errBox.hidden = true;
       let content;
       try { content = JSON.parse(pasteInput.value); }
-      catch (e) { errBox.hidden = false; errBox.textContent = "That doesn't look like valid JSON — check for a missing comma or bracket."; return; }
+      catch (e) { showFormError(errBox, "That doesn't look like valid JSON — check for a missing comma or bracket."); return; }
 
       submitBtn.disabled = true; submitBtn.textContent = "Validating…";
       try {
@@ -1068,14 +1078,13 @@ async function resolveProgram() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content, changeSummary: document.getElementById(`updSummary-${id}`).value.trim() || null }),
         });
-        if (res.status === 401) { errBox.hidden = false; errBox.textContent = "Signed out — reload the page to sign back in."; return; }
+        if (res.status === 401) { showFormError(errBox, "Signed out — reload the page to sign back in."); return; }
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          errBox.hidden = false;
-          errBox.textContent = Array.isArray(body.details) && body.details.length
-            ? `Fix these issues and try again:\n${body.details.join("\n")}`
-            : body.error || "Couldn't save the update.";
-          errBox.style.whiteSpace = "pre-line";
+          const n = Array.isArray(body.details) ? body.details.length : 0;
+          showFormError(errBox,
+            n ? `Fix these issues and try again:\n${body.details.join("\n")}` : body.error || "Couldn't save the update.",
+            n ? `Validation failed: ${n} issue${n === 1 ? "" : "s"}, see details` : body.error || "Couldn't save the update.");
           return;
         }
         if (body.warnings && body.warnings.length) {
@@ -1086,7 +1095,7 @@ async function resolveProgram() {
           setTimeout(() => location.reload(), 600);
         }
       } catch (e) {
-        errBox.hidden = false; errBox.textContent = "Network error — check your connection and try again.";
+        showFormError(errBox, "Network error — check your connection and try again.");
       } finally {
         submitBtn.disabled = false; submitBtn.textContent = "Validate + save update";
       }
@@ -1162,7 +1171,7 @@ async function resolveProgram() {
           <input type="file" id="progFile" accept="application/json,.json">
           <label class="lab" for="progPaste" style="margin-top:12px">…or paste program JSON</label>
           <textarea id="progPaste" placeholder='{"startDate": "2027-01-04", ...}'></textarea>
-          <p class="note-muted" id="uploadErrors" hidden></p>
+          <p class="error-box" id="uploadErrors" role="alert" hidden></p>
           <button type="button" class="primary" id="progUpload">Validate + create draft</button>
           <p class="note-muted">Creates a draft — it won't replace your active program until you tap Activate above.</p>
         </div>
@@ -1181,10 +1190,10 @@ async function resolveProgram() {
       const name = $("#progName").value.trim();
       const sport = $("#progSport").value.trim();
       const raw = $("#progPaste").value;
-      if (!name) { errBox.hidden = false; errBox.textContent = "Name is required."; return; }
+      if (!name) { showFormError(errBox, "Name is required."); return; }
       let content;
       try { content = JSON.parse(raw); }
-      catch (e) { errBox.hidden = false; errBox.textContent = "That doesn't look like valid JSON — check for a missing comma or bracket."; return; }
+      catch (e) { showFormError(errBox, "That doesn't look like valid JSON — check for a missing comma or bracket."); return; }
 
       const btn = $("#progUpload");
       btn.disabled = true; btn.textContent = "Validating…";
@@ -1194,14 +1203,13 @@ async function resolveProgram() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, sport: sport || null, content }),
         });
-        if (res.status === 401) { errBox.hidden = false; errBox.textContent = "Signed out — reload the page to sign back in."; return; }
+        if (res.status === 401) { showFormError(errBox, "Signed out — reload the page to sign back in."); return; }
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          errBox.hidden = false;
-          errBox.textContent = Array.isArray(body.details) && body.details.length
-            ? `Fix these issues and try again:\n${body.details.join("\n")}`
-            : body.error || "Couldn't create the program.";
-          errBox.style.whiteSpace = "pre-line";
+          const n = Array.isArray(body.details) ? body.details.length : 0;
+          showFormError(errBox,
+            n ? `Fix these issues and try again:\n${body.details.join("\n")}` : body.error || "Couldn't create the program.",
+            n ? `Validation failed: ${n} issue${n === 1 ? "" : "s"}, see details` : body.error || "Couldn't create the program.");
           return;
         }
         if (body.warnings && body.warnings.length) {
@@ -1212,7 +1220,7 @@ async function resolveProgram() {
         $("#progName").value = ""; $("#progSport").value = ""; $("#progPaste").value = ""; $("#progFile").value = "";
         loadProgramList($("#progListBody"));
       } catch (e) {
-        errBox.hidden = false; errBox.textContent = "Network error — check your connection and try again.";
+        showFormError(errBox, "Network error — check your connection and try again.");
       } finally {
         btn.disabled = false; btn.textContent = "Validate + create draft";
       }

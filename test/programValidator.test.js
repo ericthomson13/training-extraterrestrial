@@ -79,10 +79,63 @@ describe("validateProgram: structural rejections", () => {
 
   it("rejects a missing required field", () => {
     const p = base();
-    delete p.units;
+    delete p.startDate;
     const result = validateProgram(p);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes("units"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("startDate"))).toBe(true);
+  });
+
+  it("accepts a program missing every non-integral field (units, titles, phases, rx, test labels)", () => {
+    const p = base();
+    delete p.units;
+    p.periods.forEach((x) => { delete x.phase; });
+    p.testDefinitions = [{ key: "squat", kind: "load-reps-e1rm" }];
+    p.sessionTemplates.forEach((t) => { delete t.title; t.items.forEach((it) => { delete it.rx; }); });
+    const result = validateProgram(p);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("accepts a program with none of the optional top-level sections", () => {
+    const p = base();
+    for (const k of ["testDefinitions", "videos", "circuits", "activation", "warmupTemplates"]) delete p[k];
+    p.sessionTemplates.forEach((s) => { delete s.warmupTemplate; });
+    const result = validateProgram(p);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it("still type-checks an optional top-level section when it is present", () => {
+    for (const [k, bad] of [["testDefinitions", {}], ["videos", []], ["circuits", "x"], ["activation", null], ["warmupTemplates", {}]]) {
+      const p = base();
+      p[k] = bad;
+      expect(validateProgram(p).valid, k).toBe(false);
+    }
+  });
+
+  it("accepts a warm-up template with only a key, or any subset of its fields", () => {
+    for (const w of [{ key: "w1" }, { key: "w1", ergName: "Bike" }, { key: "w1", mobility: "Ankle rocks" }, { key: "w1", erg: [["0-3 min", "Easy", "RPE 3"]] }]) {
+      const p = base();
+      p.warmupTemplates = [w];
+      const result = validateProgram(p);
+      expect(result.errors, JSON.stringify(w)).toEqual([]);
+    }
+  });
+
+  it("treats an empty string in an optional text field as not provided", () => {
+    const p = base();
+    p.warmupTemplates = [{ key: "w1", ergName: "", mobility: "" }];
+    p.periods[0].phase = "";
+    p.sessionTemplates[0].title = "";
+    expect(validateProgram(p).errors).toEqual([]);
+  });
+
+  it("still validates warm-up fields that are present", () => {
+    const bads = [{ key: "w1", erg: "nope" }, { key: "w1", erg: [["a", "b"]] }, { key: "w1", ergName: 5 }, { key: "w1", activationGroup: "missing" }];
+    for (const w of bads) {
+      const p = base();
+      p.warmupTemplates = [w];
+      expect(validateProgram(p).valid, JSON.stringify(w)).toBe(false);
+    }
   });
 
   it("rejects an invalid units value", () => {

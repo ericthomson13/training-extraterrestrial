@@ -90,3 +90,17 @@ describe("programEngine: scope resolution", () => {
     expect(getSession(content, 2, "B").noWarmupSpikes).toBe(false);
   });
 });
+
+describe("graceful handling of missing optional fields", () => {
+  const content = {
+    startDate: "2027-01-04",
+    periods: [{ n: 1, lengthDays: 7 }],
+    sessionTemplates: [{ key: "A", scope: { type: "period", n: 1 }, items: [{ name: "Back squat" }] }],
+  };
+  it("defaults title to the key, phase to empty, and an item with no rx to one set", () => {
+    const s = getSession(content, 1, "A");
+    expect(s.title).toBe("A");
+    expect(periodPhase(content, 1)).toBe("");
+    expect(s.items[0]).toMatchObject({ name: "Back squat", rx: "", sets: 1 });
+  });
+});

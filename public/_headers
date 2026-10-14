@@ -1,0 +1,3 @@
+# Show the plain-text guides in the browser instead of downloading them.
+/*.md
+  Content-Type: text/plain; charset=utf-8

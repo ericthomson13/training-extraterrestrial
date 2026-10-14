@@ -1151,7 +1151,8 @@ async function resolveProgram() {
         <summary><h2>Build a program with Claude</h2></summary>
         <div class="panel-body">
           <p class="note-muted">No coach or written plan yet? Use this guide in a chat with Claude to design one, then upload the result below.</p>
-          <p class="kv"><a href="build-your-training-plan.md" target="_blank" rel="noopener">Program-building guide</a></p>
+          <p class="kv"><a href="build-your-training-plan.md" target="_blank" rel="noopener">Program-building guide</a> <button type="button" class="link-btn" id="copyGuide">Copy the prompt</button></p>
+          <textarea id="guideText" hidden readonly aria-label="Program-building guide text" style="width:100%;min-height:140px"></textarea>
           <p class="kv"><a href="program.schema.json" target="_blank" rel="noopener">Program schema (for Claude to follow)</a></p>
           <p class="kv"><a href="example-program.json" target="_blank" rel="noopener">Example program</a></p>
         </div>
@@ -1178,6 +1179,15 @@ async function resolveProgram() {
       </details>`;
 
     loadProgramList($("#progListBody"));
+    $("#copyGuide").onclick = async () => {
+      try {
+        const res = await fetch("build-your-training-plan.md");
+        if (!res.ok) throw new Error("bad status");
+        const text = await res.text();
+        try { await navigator.clipboard.writeText(text); toast("Prompt copied. Paste it into a chat with Claude"); }
+        catch (e) { const ta = $("#guideText"); ta.value = text; ta.hidden = false; ta.select(); toast("Select all and copy the text below"); }
+      } catch (e) { toast("Couldn't load the guide. Open the link instead.", { err: true }); }
+    };
 
     $("#progFile").onchange = async ev => {
       const f = ev.target.files[0];

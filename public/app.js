@@ -54,7 +54,10 @@ async function resolveProgram() {
 
 (async function () {
   "use strict";
-  const { content: P, meta: programMeta } = await resolveProgram();
+  const { content: rawProgram, meta: programMeta } = await resolveProgram();
+  // Optional sections default to empty so the rest of the app can index into
+  // them unconditionally (see program.schema.json's required list).
+  const P = rawProgram && { testDefinitions: [], videos: {}, circuits: {}, activation: {}, warmupTemplates: [], ...rawProgram };
   const $ = (s, el = document) => el.querySelector(s);
   const app = $("#app");
   // Branding is entirely program-driven, never a hardcoded sport/program name
@@ -338,7 +341,7 @@ async function resolveProgram() {
     const logged = loggedIds();
     const counts = loggedCounts();
     const priorEntries = getLog().filter(e => e.sessionId === s.id);
-    $("#phaseLine").textContent = `${weekLabel(selWeek)} · ${PHASE(selWeek)}`;
+    $("#phaseLine").textContent = [weekLabel(selWeek), PHASE(selWeek)].filter(Boolean).join(" · ");
     const warmupTpl = s.warmupTemplate ? P.warmupTemplates.find(t => t.key === s.warmupTemplate) : null;
     const noSpikes = s.noWarmupSpikes;
 
@@ -366,24 +369,28 @@ async function resolveProgram() {
         }).join("")}
       </div>
       <div class="head">
-        <div class="eyebrow">${esc(weekLabel(selWeek))} · ${esc(weekDates(selWeek))} · ${esc(PHASE(selWeek))}</div>
+        <div class="eyebrow">${esc([weekLabel(selWeek), weekDates(selWeek), PHASE(selWeek)].filter(Boolean).join(" · "))}</div>
         <h1>${esc(s.title)}</h1>
         ${priorEntries.length ? `<p class="note-muted">✓ Already logged${priorEntries.length > 1 ? ` ${priorEntries.length} times, most recently` : ""} on ${esc(fmt(parseISO(priorEntries[priorEntries.length - 1].date)))}. Saving again adds another entry — it won't overwrite.</p>` : ""}
         <div class="progress" id="prog"></div>
       </div>
-      ${warmupTpl ? `
+      ${warmupTpl ? (() => {
+        const act = warmupTpl.activationGroup && P.activation[warmupTpl.activationGroup];
+        const parts = [warmupTpl.erg && "erg", warmupTpl.mobility && "mobility", act && "activation"].filter(Boolean);
+        return `
       <details class="panel" id="warm" open>
-        <summary><span><h2>Warm-up · ${esc(warmupTpl.ergName)}</h2><span class="progress">7 min erg · mobility · activation · ~14 min</span></span></summary>
+        <summary><span><h2>Warm-up${warmupTpl.ergName ? ` · ${esc(warmupTpl.ergName)}` : ""}</h2>${parts.length ? `<span class="progress">${parts.join(" · ")}</span>` : ""}</span></summary>
         <div class="panel-body">
-          <table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table>
+          ${warmupTpl.erg && warmupTpl.erg.length ? `<table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table>` : ""}
           ${noSpikes ? '<p class="note-muted">Skip the spikes today (ME, deload or ski-specific day).</p>' : ""}
           ${s.testDayNote ? `<p class="note-muted">${esc(s.testDayNote)}</p>` : ""}
-          <p class="kv"><b>Mobility · 3 min</b>${esc(warmupTpl.mobility)}</p>
-          <p class="kv"><b>Activation · 3–4 min</b>${esc(P.activation[warmupTpl.activationGroup])}</p>
+          ${warmupTpl.mobility ? `<p class="kv"><b>Mobility</b>${esc(warmupTpl.mobility)}</p>` : ""}
+          ${act ? `<p class="kv"><b>Activation</b>${esc(act)}</p>` : ""}
           <p class="kv"><b>Then</b>2–4 ramp sets to the first working weight.</p>
           <button type="button" class="ex-next" id="warmDone">✓ Done — start workout</button>
         </div>
-      </details>` : ""}
+      </details>`;
+      })() : ""}
       <div id="items"></div>
       <section class="finish" aria-label="Finish session">
         <div class="grid2">
@@ -491,7 +498,7 @@ async function resolveProgram() {
           </div>
         </div>
         ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
-        <div class="rx">${esc(it.rx)}</div>
+        ${it.rx ? `<div class="rx">${esc(it.rx)}</div>` : ""}
         <div class="meta">
           ${tgt ? `<span class="tag target">Target ${tgt} ${UNIT}</span>` : ""}
           ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
@@ -630,7 +637,7 @@ async function resolveProgram() {
             ${url ? `<a class="vid" href="${esc(url)}" target="_blank" rel="noopener">Video ↗</a>` : ""}
           </div>
           ${it.desc ? `<p class="ex-desc" id="desc-${s.id}-${i}" hidden>${esc(it.desc)}</p>` : ""}
-          <div class="rx">${esc(it.rx)}</div>
+          ${it.rx ? `<div class="rx">${esc(it.rx)}</div>` : ""}
           <div class="meta">
             ${tgt ? `<span class="tag target">Target ${tgt} ${UNIT}</span>` : ""}
             ${it.lift && it.pct && !maxInfo ? `<span class="tag">Target appears after your Week 1 test</span>` : ""}
@@ -667,7 +674,7 @@ async function resolveProgram() {
             <span class="disclosure" aria-hidden="true"></span>
           </div>
         </div>
-        <div class="rx">${esc(items.map(it => it.rx).join(" · "))}</div>
+        ${items.some(it => it.rx) ? `<div class="rx">${esc(items.map(it => it.rx).filter(Boolean).join(" · "))}</div>` : ""}
       </summary>
       <div class="ex-body">
         ${subHTML}
@@ -806,7 +813,7 @@ async function resolveProgram() {
   // "lift"/"max-load"/"max-value" are app.js's own local sentinels (kept for
   // the pre-existing load+reps-pair rendering below), translated from the
   // program schema's own kind vocabulary: load-reps-e1rm / max-load / max-value.
-  const TEST_FIELDS = P ? P.testDefinitions.map(t => [t.key, t.label, t.unit, t.kind === "load-reps-e1rm" ? "lift" : t.kind]) : [];
+  const TEST_FIELDS = P ? P.testDefinitions.map(t => [t.key, t.label || t.key, t.unit || "", t.kind === "load-reps-e1rm" ? "lift" : t.kind]) : [];
   const kindForTest = key => (TEST_FIELDS.find(f => f[0] === key) || [])[3];
   function testsFromEntry(e) {
     const v = {};
@@ -838,17 +845,15 @@ async function resolveProgram() {
   function renderTests() {
     const tests = getTests().slice().sort((a, b) => a.date < b.date ? -1 : 1);
     $("#phaseLine").textContent = "Tests + maxes";
-    const sq = getMax("squat"), dl = getMax("deadlift");
+    const liftTests = TEST_FIELDS.filter(f => f[3] === "lift");
     app.innerHTML = `
-      <div class="head"><div class="eyebrow">Estimated 1RM drives every % target</div><h1>Tests + maxes</h1></div>
-      <div class="maxes">
-        <div class="stat"><b>Squat e1RM</b><span>${sq ? sq.v + " " + UNIT : "—"}</span><em>${sq ? esc(sq.src) : "Test in Week 1, Day 2"}</em></div>
-        <div class="stat"><b>Deadlift e1RM</b><span>${dl ? dl.v + " " + UNIT : "—"}</span><em>${dl ? esc(dl.src) : "Test in Week 1, Day 2"}</em></div>
-      </div>
+      <div class="head">${liftTests.length ? '<div class="eyebrow">Estimated 1RM drives every % target</div>' : ""}<h1>Tests + maxes</h1></div>
+      ${liftTests.length ? `<div class="maxes">${liftTests.map(([k, label]) => { const m = getMax(k); return `<div class="stat"><b>${esc(label)} e1RM</b><span>${m ? m.v + " " + UNIT : "—"}</span><em>${m ? esc(m.src) : "Not tested yet"}</em></div>`; }).join("")}</div>` : ""}
+      ${TEST_FIELDS.length ? "" : `<p class="empty">This program doesn't define any tests.</p>`}
       ${tests.length ? `<div class="tbl-wrap"><table class="tests"><thead><tr><th scope="col">Test</th>${tests.map(t => `<th scope="col">${fmt(parseISO(t.date))}</th>`).join("")}</tr></thead><tbody>
         ${TEST_FIELDS.filter(f => tests.some(t => t.v[f[0]] != null)).map(f => `<tr><th scope="row">${esc(f[1])} <span class="progress">${esc(f[2])}</span></th>${tests.map(t => `<td class="num">${esc(showVal(t.v[f[0]]))}</td>`).join("")}</tr>`).join("")}
-      </tbody></table></div>` : `<p class="empty">No tests yet. Week 1 test sessions fill this in when you save them, or add results below.</p>`}
-      <details class="panel" id="addTest">
+      </tbody></table></div>` : TEST_FIELDS.length ? `<p class="empty">No tests yet. Test sessions fill this in when you save them, or add results below.</p>` : ""}
+      ${TEST_FIELDS.length ? `<details class="panel" id="addTest">
         <summary><h2>Add or correct results</h2></summary>
         <div class="panel-body">
           <div class="test-form">
@@ -859,8 +864,8 @@ async function resolveProgram() {
           </div>
           <button type="button" class="primary" id="tSave">Save results</button>
         </div>
-      </details>`;
-    $("#tSave").onclick = () => {
+      </details>` : ""}`;
+    if ($("#tSave")) $("#tSave").onclick = () => {
       const date = $("#tdate").value || iso(new Date()); const v = {};
       TEST_FIELDS.forEach(([k, , , kind]) => {
         if (kind === "lift") { const l = num($(`#t-${k}-l`).value), r = num($(`#t-${k}-r`).value); if (l && r) v[k] = { load: l, reps: r, e1rm: e1rm(l, r) }; }
@@ -901,20 +906,20 @@ async function resolveProgram() {
   /* ---------- log + export ---------- */
   function exportText() {
     const log = getLog(), tests = getTests();
-    const lines = [`SKI STRENGTH LOG — exported ${iso(new Date())}`];
-    const sq = getMax("squat"), dl = getMax("deadlift");
-    lines.push(`Current e1RM: squat ${sq ? sq.v : "—"} ${UNIT} · deadlift ${dl ? dl.v : "—"} ${UNIT}`);
+    const lines = [`${((P && P.displayName) || DEFAULT_APP_NAME).toUpperCase()} LOG — exported ${iso(new Date())}`];
+    const maxes = TEST_FIELDS.filter(f => f[3] === "lift").map(([k, label]) => { const m = getMax(k); return `${label.toLowerCase()} ${m ? m.v : "—"} ${UNIT}`; });
+    if (maxes.length) lines.push(`Current e1RM: ${maxes.join(" · ")}`);
     if (tests.length) {
       lines.push("", "TESTS");
       tests.slice().sort((a, b) => a.date < b.date ? -1 : 1).forEach(t => lines.push(`${t.date}: ` + TEST_FIELDS.filter(f => t.v[f[0]] != null).map(f => `${f[1]} ${showVal(t.v[f[0]])}${typeof t.v[f[0]] === "object" ? "" : " " + f[2]}`).join("; ")));
     }
     lines.push("", "SESSIONS");
     log.forEach(e => {
-      lines.push("", `## ${e.date} · ${weekLabel(e.week)} ${e.key} · ${e.title}` + [e.bw && ` · BW ${e.bw}`, e.sore != null && ` · soreness ${e.sore}/5`].filter(Boolean).join(""));
+      lines.push("", `## ${e.date} · ${weekLabel(e.week)} ${e.key}${e.title ? ` · ${e.title}` : ""}` + [e.bw && ` · BW ${e.bw}`, e.sore != null && ` · soreness ${e.sore}/5`].filter(Boolean).join(""));
       e.items.forEach(it => {
         if (!it.sets.length && !it.note) return;
         const sets = it.sets.map(x => [x.load && x.load, x.reps && x.reps + (it.u ? it.u : "")].filter(Boolean).join("×") + (x.rpe ? "@" + x.rpe : "")).join(", ");
-        lines.push(`- ${it.name} [${it.rx}${it.target ? `, target ${it.target}` : ""}]: ${sets || "done"}${it.note ? ` — ${it.note}` : ""}`);
+        lines.push(`- ${it.name}${it.rx || it.target ? ` [${[it.rx, it.target && `target ${it.target}`].filter(Boolean).join(", ")}]` : ""}: ${sets || "done"}${it.note ? ` — ${it.note}` : ""}`);
       });
       if (e.notes) lines.push(`Notes: ${e.notes}`);
     });
@@ -953,7 +958,7 @@ async function resolveProgram() {
     log.forEach(e => {
       const det = document.createElement("details"); det.className = "entry";
       const setCount = e.items.reduce((a, it) => a + it.sets.length, 0);
-      det.innerHTML = `<summary><span><b>${esc(weekLabel(e.week))} ${esc(e.key)}</b> · ${esc(e.title)}</span><span class="d">${fmt(parseISO(e.date))} · ${setCount} sets</span></summary>
+      det.innerHTML = `<summary><span><b>${esc(weekLabel(e.week))} ${esc(e.key)}</b>${e.title ? ` · ${esc(e.title)}` : ""}</span><span class="d">${fmt(parseISO(e.date))} · ${setCount} sets</span></summary>
         <div class="b">
           ${e.items.filter(it => it.sets.length || it.note).map(it => `<p><span class="x">${esc(it.name)}</span><br><span class="v">${esc(it.sets.map(x => [x.load, x.reps && x.reps + (it.u || "")].filter(Boolean).join("×") + (x.rpe ? "@" + x.rpe : "")).join(", "))}</span>${it.note ? `<br><i>${esc(it.note)}</i>` : ""}</p>`).join("")}
           ${e.notes ? `<p><i>${esc(e.notes)}</i></p>` : ""}

@@ -73,12 +73,14 @@ export function sessionKeysFor(content, n) {
 // string, since JSON object keys are always strings) for a recurring
 // template's per-period variant. Returns null if this period is skipped.
 function resolveRx(rx, n) {
+  if (rx == null) return ""; // no prescription authored: still a loggable exercise
   if (typeof rx === "string") return rx;
   const v = rx[String(n)];
   return v === undefined ? null : v;
 }
 
 function parseRx(rx, o) {
+  rx = rx || "";
   const r = { sets: 1, reps: "", pct: o.pct || null };
   let m;
   if ((m = rx.match(/^(\d+)\s*×\s*(\d+)/))) {
@@ -105,7 +107,7 @@ export function getSession(content, n, key) {
     id: `p${n}-${key}`,
     period: n,
     key,
-    title: template.title,
+    title: template.title || template.key,
     shortLabel: template.shortLabel || key,
     items,
     isTest: !!template.isTest,

@@ -65,7 +65,7 @@ def minimal_structural_check(program):
     Not a substitute for the full schema -- install `jsonschema` (pip install
     jsonschema) for complete validation. This just catches the basics."""
     errors = []
-    required = ["startDate", "units", "periods", "testDefinitions", "videos", "circuits", "activation", "warmupTemplates", "sessionTemplates"]
+    required = ["startDate", "units", "periods", "sessionTemplates"]
     for key in required:
         if key not in program:
             errors.append(f"(root): missing required field '{key}'")

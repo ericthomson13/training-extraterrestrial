@@ -208,7 +208,9 @@ The rules that matter most (the schema has the full detail):
   - `units` (`lb` or `kg`)
   - `periods` (numbered 1..N with no gaps, each with `phase` and `lengthDays`)
   - `ongoingPeriod` (optional)
-  - `seedMaxes`, `testDefinitions`, `videos`, `circuits`, `activation`, `warmupTemplates`, `sessionTemplates`
+  - `sessionTemplates`
+  - Optional, and only include what the program actually uses: `seedMaxes`, `testDefinitions`, `videos`, `circuits`, `activation`, `warmupTemplates`. Leave out anything that doesn't apply instead of filling it with placeholders.
+- In a warm-up template only `key` is required. `ergName`, `erg`, `mobility` and `activationGroup` are all optional, so a warm-up can be just a ramp, just mobility, or any mix.
 - Each session template has a `scope`:
   - `{ "type": "period", "n": 1 }` for a one-off in one period
   - `{ "type": "periodRange", "periods": [2,3,4] }` for a session that repeats across periods

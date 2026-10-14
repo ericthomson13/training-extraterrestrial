@@ -48,6 +48,13 @@ function setsEqual(a, b) {
   return true;
 }
 
+// For optional text fields an empty string means "not provided" (the UI just
+// hides the field), so it's accepted rather than rejected.
+function checkOptionalString(errors, path, value, maxLength, multiline) {
+  if (value === undefined || value === "") return;
+  checkString(errors, path, value, maxLength, multiline);
+}
+
 function checkString(errors, path, value, maxLength, multiline) {
   if (typeof value !== "string") {
     errors.push(`${path}: must be a string`);
@@ -86,7 +93,12 @@ export function validateProgram(content) {
     return { valid: false, errors: ["content must be a JSON object"] };
   }
 
-  const required = ["startDate", "units", "periods", "testDefinitions", "videos", "circuits", "activation", "warmupTemplates", "sessionTemplates"];
+  // Only what the app can't function without. testDefinitions, videos,
+  // circuits, activation and warmupTemplates are optional and default to
+  // empty (the client applies the same defaults) -- a program with no tests,
+  // videos or warm-ups is still a valid, loggable program.
+  // (units is optional too: it defaults to 'lb'.)
+  const required = ["startDate", "periods", "sessionTemplates"];
   for (const key of required) if (!(key in content)) errors.push(`(root): missing required field '${key}'`);
   if (content.units !== undefined && content.units !== "lb" && content.units !== "kg") errors.push("units: must be 'lb' or 'kg'");
   if (content.startDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(content.startDate)) {
@@ -101,15 +113,21 @@ export function validateProgram(content) {
   }
   if (content.displayName !== undefined) checkString(errors, "displayName", content.displayName, 200, false);
   if (!Array.isArray(content.periods) || content.periods.length === 0) errors.push("periods: must be a non-empty array");
-  if (!Array.isArray(content.testDefinitions)) errors.push("testDefinitions: must be an array");
-  if (typeof content.videos !== "object" || content.videos === null || Array.isArray(content.videos)) errors.push("videos: must be an object");
-  if (typeof content.circuits !== "object" || content.circuits === null || Array.isArray(content.circuits)) errors.push("circuits: must be an object");
-  if (typeof content.activation !== "object" || content.activation === null || Array.isArray(content.activation)) errors.push("activation: must be an object");
-  if (!Array.isArray(content.warmupTemplates)) errors.push("warmupTemplates: must be an array");
+  if (content.testDefinitions !== undefined && !Array.isArray(content.testDefinitions)) errors.push("testDefinitions: must be an array");
+  if (content.videos !== undefined && (typeof content.videos !== "object" || content.videos === null || Array.isArray(content.videos))) errors.push("videos: must be an object");
+  if (content.circuits !== undefined && (typeof content.circuits !== "object" || content.circuits === null || Array.isArray(content.circuits))) errors.push("circuits: must be an object");
+  if (content.activation !== undefined && (typeof content.activation !== "object" || content.activation === null || Array.isArray(content.activation))) errors.push("activation: must be an object");
+  if (content.warmupTemplates !== undefined && !Array.isArray(content.warmupTemplates)) errors.push("warmupTemplates: must be an array");
   if (!Array.isArray(content.sessionTemplates) || content.sessionTemplates.length === 0) errors.push("sessionTemplates: must be a non-empty array");
 
   // Bail before deeper checks that assume these exist and have the right shape.
   if (errors.length) return { valid: false, errors };
+
+  const testDefinitions = content.testDefinitions ?? [];
+  const videos = content.videos ?? {};
+  const circuits = content.circuits ?? {};
+  const activation = content.activation ?? {};
+  const warmupTemplates = content.warmupTemplates ?? [];
 
   // periods
   const periodNumbers = new Set();
@@ -117,7 +135,7 @@ export function validateProgram(content) {
     if (typeof p !== "object" || p === null) { errors.push(`periods[${i}]: must be an object`); return; }
     if (Number.isInteger(p.n) && p.n >= 1) periodNumbers.add(p.n);
     else errors.push(`periods[${i}]: n must be a positive integer`);
-    checkString(errors, `periods[${i}].phase`, p.phase, 200, true);
+    checkOptionalString(errors, `periods[${i}].phase`, p.phase, 200, true);
     if (!Number.isInteger(p.lengthDays) || p.lengthDays < 1) errors.push(`periods[${i}]: lengthDays must be a positive integer`);
     if (p.deload !== undefined && typeof p.deload !== "boolean") errors.push(`periods[${i}]: deload must be a boolean`);
   });
@@ -130,7 +148,7 @@ export function validateProgram(content) {
     if (typeof content.ongoingPeriod !== "object" || content.ongoingPeriod === null) {
       errors.push("ongoingPeriod: must be an object");
     } else {
-      checkString(errors, "ongoingPeriod.phase", content.ongoingPeriod.phase, 200, true);
+      checkOptionalString(errors, "ongoingPeriod.phase", content.ongoingPeriod.phase, 200, true);
       if (typeof content.ongoingPeriod.startDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(content.ongoingPeriod.startDate)) {
         errors.push("ongoingPeriod.startDate: must be an ISO date");
       }
@@ -139,27 +157,27 @@ export function validateProgram(content) {
 
   // testDefinitions
   const testKeys = new Set();
-  content.testDefinitions.forEach((t, i) => {
+  testDefinitions.forEach((t, i) => {
     if (typeof t !== "object" || t === null) { errors.push(`testDefinitions[${i}]: must be an object`); return; }
     checkKey(errors, `testDefinitions[${i}].key`, t.key);
     if (typeof t.key === "string" && KEY_RE.test(t.key)) testKeys.add(t.key);
-    checkString(errors, `testDefinitions[${i}].label`, t.label, 200, false);
-    checkString(errors, `testDefinitions[${i}].unit`, t.unit, 20, false);
+    checkOptionalString(errors, `testDefinitions[${i}].label`, t.label, 200, false);
+    checkOptionalString(errors, `testDefinitions[${i}].unit`, t.unit, 20, false);
     if (!KIND_VALUES.has(t.kind)) errors.push(`testDefinitions[${i}]: kind must be one of load-reps-e1rm, max-load, max-value`);
   });
 
   // videos -- scheme allowlist, not just string type
-  const videoKeys = new Set(Object.keys(content.videos));
-  for (const [key, url] of Object.entries(content.videos)) {
+  const videoKeys = new Set(Object.keys(videos));
+  for (const [key, url] of Object.entries(videos)) {
     checkString(errors, `videos.${key}`, url, 2000, false);
     if (typeof url === "string" && !isSafeUrl(url)) errors.push(`videos.${key}: must be an http:// or https:// URL`);
   }
 
-  const circuitKeys = new Set(Object.keys(content.circuits));
-  for (const [key, desc] of Object.entries(content.circuits)) checkString(errors, `circuits.${key}`, desc, 2000, true);
+  const circuitKeys = new Set(Object.keys(circuits));
+  for (const [key, desc] of Object.entries(circuits)) checkString(errors, `circuits.${key}`, desc, 2000, true);
 
-  const activationKeys = new Set(Object.keys(content.activation));
-  for (const [key, desc] of Object.entries(content.activation)) checkString(errors, `activation.${key}`, desc, 2000, true);
+  const activationKeys = new Set(Object.keys(activation));
+  for (const [key, desc] of Object.entries(activation)) checkString(errors, `activation.${key}`, desc, 2000, true);
 
   if (content.seedMaxes !== undefined) {
     if (typeof content.seedMaxes !== "object" || content.seedMaxes === null || Array.isArray(content.seedMaxes)) {
@@ -174,20 +192,24 @@ export function validateProgram(content) {
 
   // warmupTemplates
   const warmupKeys = new Set();
-  content.warmupTemplates.forEach((w, i) => {
+  warmupTemplates.forEach((w, i) => {
     if (typeof w !== "object" || w === null) { errors.push(`warmupTemplates[${i}]: must be an object`); return; }
     checkKey(errors, `warmupTemplates[${i}].key`, w.key);
     if (typeof w.key === "string" && KEY_RE.test(w.key)) warmupKeys.add(w.key);
-    checkString(errors, `warmupTemplates[${i}].ergName`, w.ergName, 100, false);
-    if (!Array.isArray(w.erg)) {
-      errors.push(`warmupTemplates[${i}]: erg must be an array`);
-    } else {
-      w.erg.forEach((row, ri) => {
-        if (!Array.isArray(row) || row.length !== 3) errors.push(`warmupTemplates[${i}].erg[${ri}]: must be a 3-element array`);
-        else row.forEach((cell, ci) => checkString(errors, `warmupTemplates[${i}].erg[${ri}][${ci}]`, cell, 200, false));
-      });
+    // Everything but the key is optional: a warm-up can be just an erg ramp,
+    // just mobility, just activation, or any mix.
+    checkOptionalString(errors, `warmupTemplates[${i}].ergName`, w.ergName, 100, false);
+    if (w.erg !== undefined) {
+      if (!Array.isArray(w.erg)) {
+        errors.push(`warmupTemplates[${i}]: erg must be an array`);
+      } else {
+        w.erg.forEach((row, ri) => {
+          if (!Array.isArray(row) || row.length !== 3) errors.push(`warmupTemplates[${i}].erg[${ri}]: must be a 3-element array`);
+          else row.forEach((cell, ci) => checkString(errors, `warmupTemplates[${i}].erg[${ri}][${ci}]`, cell, 200, false));
+        });
+      }
     }
-    checkString(errors, `warmupTemplates[${i}].mobility`, w.mobility, 1000, true);
+    checkOptionalString(errors, `warmupTemplates[${i}].mobility`, w.mobility, 1000, true);
     if (w.activationGroup !== undefined && !activationKeys.has(w.activationGroup)) {
       errors.push(`warmupTemplates[${i}]: activationGroup '${w.activationGroup}' not found in activation`);
     }
@@ -198,7 +220,7 @@ export function validateProgram(content) {
     if (typeof session !== "object" || session === null) { errors.push(`sessionTemplates[${si}]: must be an object`); return; }
     const label = typeof session.key === "string" && KEY_RE.test(session.key) ? session.key : `#${si}`;
     checkKey(errors, `sessionTemplates[${label}].key`, session.key);
-    checkString(errors, `sessionTemplates[${label}].title`, session.title, 200, false);
+    checkOptionalString(errors, `sessionTemplates[${label}].title`, session.title, 200, false);
     if (session.shortLabel !== undefined) checkString(errors, `sessionTemplates[${label}].shortLabel`, session.shortLabel, 50, false);
 
     const scope = session.scope;
@@ -238,7 +260,9 @@ export function validateProgram(content) {
 
       const rx = item.rx;
       let rxPeriods = null;
-      if (typeof rx === "string") {
+      if (rx === undefined) {
+        // rx is optional -- an exercise with no prescription is just a name to log against
+      } else if (typeof rx === "string") {
         checkString(errors, `sessionTemplates[${label}].${name}.rx`, rx, 200, false);
       } else if (rx && typeof rx === "object" && !Array.isArray(rx)) {
         rxPeriods = new Set();

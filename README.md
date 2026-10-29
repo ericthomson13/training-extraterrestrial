@@ -22,8 +22,10 @@ flowchart TD
 ## Status
 
 - **Phase 0 — hosting**: done. Static PWA on Cloudflare Pages at `training.extraterrestrial.dev`, behind Cloudflare Access.
-- **Phase 1 — sync backend**: in progress. D1-backed sessions/tests, offline queue, cross-device sync, `GET /api/export.txt`.
-- Phase 2 (push to Garmin), Phase 3 (pull from Garmin), Phase 4 (Claude MCP connector): not started.
+- **Phase 1 — sync backend**: done. D1-backed sessions/tests, offline queue, cross-device sync (race-safe: pulls flush the queue first and never overwrite unsent local edits), `GET /api/export.txt`.
+- **Multi-user, document-authored programs** (see `PLANNING.md` Phases A–D): done. Programs are JSON documents validated server-side and versioned; only the essentials are required and every other field degrades gracefully in the UI.
+- **Logging UX**: entries can be edited after saving, repeat saves are warned about and counted, and "Done" advances to the next unfinished exercise.
+- Next up (not started): a no-login demo mode (local-only, nothing saved to the database), then Phase 2 (push to Garmin), Phase 3 (pull from Garmin), Phase 4 (Claude MCP connector).
 
 ## Local development
 

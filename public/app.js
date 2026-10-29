@@ -423,7 +423,7 @@ async function resolveProgram() {
     const warmDone = $("#warmDone");
     if (warmDone) warmDone.onclick = () => {
       $("#warm").open = false;
-      const first = wrap.firstElementChild;
+      const first = Array.from(wrap.children).find(c => !c.classList.contains("done")) || wrap.firstElementChild;
       if (first) { first.open = true; scrollCardIntoView(first); }
     };
 
@@ -609,11 +609,7 @@ async function resolveProgram() {
       di.sets.pop(); store.set(draftKey(s.id), d);
       el.replaceWith(renderItem(s, it, d, i, el.open)); updateProgress(s, d);
     };
-    el.querySelector('[data-act="next"]').onclick = () => {
-      el.open = false;
-      const next = el.nextElementSibling;
-      if (next && next.tagName === "DETAILS") { next.open = true; scrollCardIntoView(next); }
-    };
+    el.querySelector('[data-act="next"]').onclick = () => advanceFrom(el);
     return el;
   }
 
@@ -768,13 +764,22 @@ async function resolveProgram() {
       };
     });
 
-    el.querySelector('[data-act="next"]').onclick = () => {
-      el.open = false;
-      const next = el.nextElementSibling;
-      if (next && next.tagName === "DETAILS") { next.open = true; scrollCardIntoView(next); }
-    };
+    el.querySelector('[data-act="next"]').onclick = () => advanceFrom(el);
 
     return el;
+  }
+
+  // After finishing an exercise, go to the top-most exercise that still has
+  // sets to do -- not simply the one below. Skipping ahead and finishing a
+  // later exercise therefore never reopens finished work: it goes back to the
+  // earliest gap, and once everything above is done it moves on down. If
+  // nothing is left, just close this card and show the finish section.
+  function advanceFrom(el) {
+    el.open = false;
+    const next = Array.from(el.parentElement.children).find(c => c !== el && c.tagName === "DETAILS" && !c.classList.contains("done"));
+    if (next) { next.open = true; scrollCardIntoView(next); return; }
+    const finish = $(".finish");
+    if (finish) scrollCardIntoView(finish);
   }
 
   function updateProgress(s, d) {

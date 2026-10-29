@@ -212,6 +212,10 @@ Starter content (`build-your-training-plan.md`, `program.schema.json`, `example-
 
 Verified live: a brand-new second user (no programs) gets the generic empty state and auto-lands on Getting Started; uploading `example-program.json` creates a draft, activating it flips `current`/`archived` correctly and the app immediately renders the new program's own sessions/branding; switching back to Eric's real dev identity confirms his `current` ski program and its version history were untouched by the second user's writes throughout.
 
+**Since Phase D (shipped):** entries are editable after saving (weight, soreness, notes); duplicate saves need a second tap and show a repeat count; sync was hardened against pull/edit races with a visible "Syncing…" state and a "sync failing, will retry" label; the schema was loosened so only integral fields are required (`startDate`, `periods`, `sessionTemplates`, and keys/names/scope/items) and the UI hides anything missing; upload errors show a red banner plus toast; the program-building guide is viewable and copyable from the Start tab.
+
+**Backlog / next:** a demo mode for visitors without a login (no API calls, bundled example program, upload validated in the browser and kept in `localStorage`, "demo, saved on this device only" banner). Worth deciding first whether it lives on the Access-protected domain or a separate Pages project.
+
 **Phase E (later, ask first)** — richer authoring UX, season-comparison views, anything beyond what's needed for the above to work. Not planned in detail here.
 
 ## Verification

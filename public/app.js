@@ -251,21 +251,24 @@ async function resolveProgram() {
     const done = loggedKeysInWeek(w);
     return sessionKeys(w).every(k => done.has(k));
   }
-  // Scans from the first numbered period forward for the first one that
-  // isn't fully logged yet, rather than trusting the calendar alone. If
-  // you're running ahead of or behind the calendar-implied week, this still
-  // lands on the real next thing to do -- the calendar-only version of this
-  // (just `currentWeek()`) is what let an already-finished week look like
-  // "today's workout" and get logged a second time by mistake.
+  // Opens on the present week, at its next unfinished session. The scan starts
+  // at the calendar-implied week, NOT at week 1: scanning from the start made a
+  // skipped earlier week (still shown as "missed" in the week strip) hijack the
+  // app's default view. If the present week is fully logged we move on to the
+  // next week with something left to do. Earlier weeks are never auto-selected;
+  // tap their chip to go back and fill one in.
   function nextUpWeek() {
     if (!P) return 1;
     const numbered = P.periods.map(p => p.n);
-    for (const w of numbered) if (!isWeekHit(w)) return w;
     // Only advance into the ongoing phase if the program actually has one --
     // otherwise stay on the last numbered period rather than landing
     // somewhere with no matching sessionTemplates (getSession would return
     // null and crash the render).
     const hasOngoing = P.ongoingPeriod || P.sessionTemplates.some(t => t.scope?.type === "ongoing");
+    const cw = currentWeek();
+    if (cw === "S") return hasOngoing ? "S" : numbered[numbered.length - 1];
+    const from = Math.max(0, numbered.indexOf(cw));
+    for (const w of numbered.slice(from)) if (!isWeekHit(w)) return w;
     return hasOngoing ? "S" : numbered[numbered.length - 1];
   }
   let selWeek = nextUpWeek();

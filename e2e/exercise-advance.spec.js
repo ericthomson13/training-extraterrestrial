@@ -1,6 +1,6 @@
-// "Done — next exercise" goes to the top-most exercise that still has sets to
-// do, so skipping ahead never reopens finished work, but a gap above the one
-// you just finished is still picked up first.
+// "Done — next exercise" opens the next unfinished exercise below the one just
+// finished (wrapping to the top only if nothing is left below). Exercises
+// finished out of order stay closed.
 import { test, expect } from "./fixtures.js";
 import { createAndActivateProgram, isoDaysAgo, minimalProgram } from "./helpers.js";
 
@@ -34,7 +34,7 @@ test("finishing in order moves to the next exercise", async ({ page, request, us
   expect(await openIndexes(page)).toEqual([1]);
 });
 
-test("skipping ahead, then finishing, goes back to the earliest unfinished exercise, never a done one", async ({ page, request, userEmail }) => {
+test("skipping ahead, then finishing, opens the next unfinished exercise, never a done one", async ({ page, request, userEmail }) => {
   await createAndActivateProgram(request, userEmail, { content: program() });
   await page.goto("/");
 
@@ -69,4 +69,30 @@ test("the warm-up's Done button opens the first unfinished exercise, not always 
   await openCard(page, 0); // collapse it again
   await page.locator("#warmDone").click();
   expect(await openIndexes(page)).toEqual([1]);
+});
+
+test("after finishing, opens the next unfinished one below, skipping ones finished out of order", async ({ page, request, userEmail }) => {
+  await createAndActivateProgram(request, userEmail, { content: program() });
+  await page.goto("/");
+  await openCard(page, 2);
+  await finish(page, 2); // Row done first -> Press opens
+  await openCard(page, 3); // collapse Press again
+  await openCard(page, 0);
+  await finish(page, 0); // Squat done -> Bench
+  expect(await openIndexes(page)).toEqual([1]);
+  await finish(page, 1); // Bench done -> Press, NOT the already-finished Row
+  expect(await openIndexes(page)).toEqual([3]);
+});
+
+test("the warm-up stays collapsed after Done, including across a reload", async ({ page, request, userEmail }) => {
+  const p = program();
+  p.warmupTemplates = [{ key: "w1", mobility: "Ankle rocks" }];
+  p.sessionTemplates[0].warmupTemplate = "w1";
+  await createAndActivateProgram(request, userEmail, { content: p });
+  await page.goto("/");
+  await expect(page.locator("#warm")).toHaveJSProperty("open", true);
+  await page.locator("#warmDone").click();
+  await expect(page.locator("#warm")).toHaveJSProperty("open", false);
+  await page.reload();
+  await expect(page.locator("#warm")).toHaveJSProperty("open", false);
 });

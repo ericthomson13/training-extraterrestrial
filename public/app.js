@@ -411,7 +411,7 @@ async function resolveProgram() {
         const act = warmupTpl.activationGroup && P.activation[warmupTpl.activationGroup];
         const parts = [warmupTpl.erg && "erg", warmupTpl.mobility && "mobility", act && "activation"].filter(Boolean);
         return `
-      <details class="panel" id="warm" open>
+      <details class="panel" id="warm"${d.warmDone ? "" : " open"}>
         <summary><span><h2>Warm-up${warmupTpl.ergName ? ` · ${esc(warmupTpl.ergName)}` : ""}</h2>${parts.length ? `<span class="progress">${parts.join(" · ")}</span>` : ""}</span></summary>
         <div class="panel-body">
           ${warmupTpl.erg && warmupTpl.erg.length ? `<table class="erg"><tbody>${warmupTpl.erg.map((r, i) => `<tr${i === 2 && noSpikes ? ' style="opacity:.45"' : ""}><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table>` : ""}
@@ -446,6 +446,7 @@ async function resolveProgram() {
     const warmDone = $("#warmDone");
     if (warmDone) warmDone.onclick = () => {
       $("#warm").open = false;
+      d.warmDone = true; store.set(draftKey(s.id), d);
       const first = Array.from(wrap.children).find(c => !c.classList.contains("done")) || wrap.firstElementChild;
       if (first) { first.open = true; scrollCardIntoView(first); }
     };
@@ -597,7 +598,7 @@ async function resolveProgram() {
     // CSS-generated glyph, so it's read by screen readers and visible
     // regardless of the green tint for colorblind users.
     const refreshDone = () => {
-      const isDone = di.sets.length > 0 && di.sets.every(x => x.done);
+      const isDone = !!di.finished || (di.sets.length > 0 && di.sets.every(x => x.done));
       el.classList.toggle("done", isDone);
       doneBadge.hidden = !isDone;
     };
@@ -606,6 +607,7 @@ async function resolveProgram() {
       const k = +row.dataset.k, st = di.sets[k];
       row.querySelector(".n").onclick = e => {
         st.done = !st.done;
+        if (!st.done) di.finished = false;
         if (st.done) {
           row.querySelectorAll("input").forEach(inp => {
             if (!inp.value && inp.placeholder && /^\d+(\.\d+)?$/.test(inp.placeholder)) { inp.value = inp.placeholder; st[inp.dataset.f] = inp.value; }
@@ -632,7 +634,7 @@ async function resolveProgram() {
       di.sets.pop(); store.set(draftKey(s.id), d);
       el.replaceWith(renderItem(s, it, d, i, el.open)); updateProgress(s, d);
     };
-    el.querySelector('[data-act="next"]').onclick = () => advanceFrom(el);
+    el.querySelector('[data-act="next"]').onclick = () => { di.finished = true; refreshDone(); saveDraft(s, d); advanceFrom(el); };
     return el;
   }
 
@@ -746,7 +748,7 @@ async function resolveProgram() {
     // does (real text, not a color-only signal).
     const doneBadge = el.querySelector(".ex-done-badge");
     const refreshDone = () => {
-      const allDone = indices.every(i => d.items[i].sets.length > 0 && d.items[i].sets.every(x => x.done));
+      const allDone = indices.every(i => d.items[i].finished || (d.items[i].sets.length > 0 && d.items[i].sets.every(x => x.done)));
       el.classList.toggle("done", allDone);
       doneBadge.hidden = !allDone;
     };
@@ -760,6 +762,7 @@ async function resolveProgram() {
         const k = +row.dataset.k, st = di.sets[k];
         row.querySelector(".n").onclick = e => {
           st.done = !st.done;
+          if (!st.done) di.finished = false;
           if (st.done) {
             row.querySelectorAll("input").forEach(inp => {
               if (!inp.value && inp.placeholder && /^\d+(\.\d+)?$/.test(inp.placeholder)) { inp.value = inp.placeholder; st[inp.dataset.f] = inp.value; }
@@ -787,19 +790,21 @@ async function resolveProgram() {
       };
     });
 
-    el.querySelector('[data-act="next"]').onclick = () => advanceFrom(el);
+    el.querySelector('[data-act="next"]').onclick = () => { indices.forEach(i => { d.items[i].finished = true; }); refreshDone(); saveDraft(s, d); advanceFrom(el); };
 
     return el;
   }
 
-  // After finishing an exercise, go to the top-most exercise that still has
-  // sets to do -- not simply the one below. Skipping ahead and finishing a
-  // later exercise therefore never reopens finished work: it goes back to the
-  // earliest gap, and once everything above is done it moves on down. If
-  // nothing is left, just close this card and show the finish section.
+  // After finishing an exercise, open the next one still to do: the nearest
+  // unfinished card below it, wrapping to the top only when nothing is left
+  // below. Cards already finished (even if skipped ahead to earlier) stay
+  // closed. If nothing is left, close this card and show the finish section.
   function advanceFrom(el) {
     el.open = false;
-    const next = Array.from(el.parentElement.children).find(c => c !== el && c.tagName === "DETAILS" && !c.classList.contains("done"));
+    const cards = Array.from(el.parentElement.children).filter(c => c.tagName === "DETAILS");
+    const i = cards.indexOf(el);
+    const todo = c => c !== el && !c.classList.contains("done");
+    const next = cards.slice(i + 1).find(todo) || cards.slice(0, i).find(todo);
     if (next) { next.open = true; scrollCardIntoView(next); return; }
     const finish = $(".finish");
     if (finish) scrollCardIntoView(finish);

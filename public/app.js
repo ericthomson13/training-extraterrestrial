@@ -257,21 +257,41 @@ async function resolveProgram() {
   // app's default view. If the present week is fully logged we move on to the
   // next week with something left to do. Earlier weeks are never auto-selected;
   // tap their chip to go back and fill one in.
-  function nextUpWeek() {
-    if (!P) return 1;
+  function nextUpWeek() { return nextUp().week; }
+  // The real "what's next": the session right after the furthest one logged, in
+  // program order -- so a missed earlier session (shown as missed in the week
+  // strip) never pulls the default back. Never earlier than the calendar week:
+  // if you skipped ahead of your log, open on the present week's next session.
+  function nextUp() {
+    if (!P) return { week: 1, key: null };
     const numbered = P.periods.map(p => p.n);
     // Only advance into the ongoing phase if the program actually has one --
     // otherwise stay on the last numbered period rather than landing
     // somewhere with no matching sessionTemplates (getSession would return
     // null and crash the render).
     const hasOngoing = P.ongoingPeriod || P.sessionTemplates.some(t => t.scope?.type === "ongoing");
+    const order = hasOngoing ? [...numbered, "S"] : numbered;
+    const flat = order.flatMap(w => sessionKeys(w).map(k => ({ week: w, key: k })));
+    const log = getLog();
+    let last = -1;
+    flat.forEach((e, i) => { if (log.some(l => l.week === e.week && l.key === e.key)) last = i; });
     const cw = currentWeek();
-    if (cw === "S") return hasOngoing ? "S" : numbered[numbered.length - 1];
-    const from = Math.max(0, numbered.indexOf(cw));
-    for (const w of numbered.slice(from)) if (!isWeekHit(w)) return w;
-    return hasOngoing ? "S" : numbered[numbered.length - 1];
+    const cwIdx = cw === "S" ? order.length - 1 : Math.max(0, order.indexOf(cw));
+    let wi = last + 1 < flat.length ? order.indexOf(flat[last + 1].week) : order.length - 1;
+    if (wi < cwIdx) wi = cwIdx;
+    const week = order[wi];
+    // Within the chosen week: first unlogged session after the furthest logged
+    // one if it was in this week, else first unlogged, else the first.
+    const keys = sessionKeys(week);
+    const done = loggedKeysInWeek(week);
+    let key = null;
+    if (last >= 0 && flat[last].week === week) key = keys.slice(keys.indexOf(flat[last].key) + 1).find(k => !done.has(k));
+    if (!key) key = keys.find(k => !done.has(k)) || keys[0];
+    return { week, key };
   }
-  let selWeek = nextUpWeek();
+  const initialNext = nextUp();
+  let selWeek = initialNext.week;
+  selKey = initialNext.key;
   function weekStatus(w) {
     const cw = currentWeek();
     if (w === "S") return cw === "S" ? "current" : "upcoming";
